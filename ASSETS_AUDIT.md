@@ -50,3 +50,14 @@ Git history was rewritten so the upstream Mojang-derived files never appear in a
   identifiers are used in code.
 - **PureBDcraft terms**: non-commercial only, with visible credit (main menu footer + credits page). Public hosting of the
   generated atlas should be confirmed with BDcraft's current terms before publishing.
+
+## Mashup content
+
+### Duke Nukem 3D (phase 3)
+| What | Source | License / status |
+|---|---|---|
+| Enemy sprites (Assault Trooper, Pig Cop, Octabrain, Battlelord), HUD weapons, pickups, explosions, 55 sounds | Duke Nukem 3D **shareware v1.3d** `3dduke13.zip` (md5 04e4ca70…), read from `vendor/duke3d/` by `tools/duke3d/extract_duke.py` into `assets/duke/` | © 3D Realms. Shareware licence: free redistribution **only of the complete, unmodified package**. Extracted files are therefore gitignored, generated locally, and **must not be published**. A build containing `dist/duke/` is local-only. Without the zip the game falls back to Minecraft-style models and silent weapons. |
+| Item icons for the repurposed items (horse armors → guns, firework star → pipebomb, nautilus shell → ammo, heart of the sea → medkit, nether star → atomic health) | same | same (patched into the locally generated item atlas) |
+| Gameplay code (`src/mashup/duke.js`, `src/mashup/client/duke.ts`, `tools/duke3d/*.py`) | own code, behaviour modelled on the GPL-2.0 Duke3D source (tile numbers, weapon set, remote pipebombs) | MIT (own), no GPL code copied |
+
+Correction to the original brief: "shareware data is redistributable" only holds for the unmodified package; extracted sprites/sounds are not.

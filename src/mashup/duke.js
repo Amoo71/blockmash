@@ -17,10 +17,10 @@ const AMMO_ITEM = 'nautilus_shell'
 const MEDKIT = 'heart_of_the_sea'
 const ATOMIC = 'nether_star'
 const ENEMIES = {
-  trooper: { hp: 30, speed: 2.6, range: 22, dmg: 2, cooldown: 1600, sound: 'lizspit', see: 'predrg', die: 'preddy', pain: 'predpn' },
-  pigcop: { hp: 50, speed: 2.2, range: 12, dmg: 5, cooldown: 2200, sound: 'shotgun7', see: 'pigrg', die: 'pigdy', pain: 'pigpn' },
-  octabrain: { hp: 40, speed: 2.0, range: 18, dmg: 4, cooldown: 2600, fly: true, sound: 'octaat1', see: 'octarg', die: 'octady', pain: 'octapn' },
-  battlelord: { hp: 300, speed: 1.6, range: 26, dmg: 3, cooldown: 500, sound: 'chaingun', see: 'bos1rg', die: 'bos1dy', pain: 'bos1pn', boss: true }
+  trooper: { hp: 30, speed: 2.6, range: 22, dmg: 1, cooldown: 1600, sound: 'lizspit', see: 'predrg', die: 'preddy', pain: 'predpn' },
+  pigcop: { hp: 50, speed: 2.2, range: 12, dmg: 3, cooldown: 2200, sound: 'shotgun7', see: 'pigrg', die: 'pigdy', pain: 'pigpn' },
+  octabrain: { hp: 40, speed: 2.0, range: 18, dmg: 2, cooldown: 2600, fly: true, sound: 'octaat1', see: 'octarg', die: 'octady', pain: 'octapn' },
+  battlelord: { hp: 300, speed: 1.6, range: 26, dmg: 2, cooldown: 500, sound: 'chaingun', see: 'bos1rg', die: 'bos1dy', pain: 'bos1pn', boss: true }
 }
 
 module.exports = function installDuke (serv, bm) {
@@ -248,7 +248,7 @@ module.exports = function installDuke (serv, bm) {
     if (m.los && t.d < def.range && now > m.cooldown) {
       m.cooldown = now + def.cooldown * (0.8 + Math.random() * 0.4)
       emit({ type: 'enemyFire', entity: e.id, sound: def.sound, at: e.position })
-      const miss = Math.min(0.75, t.d / (def.range * 1.6))
+      const miss = Math.min(0.8, 0.35 + t.d / (def.range * 2))
       if (Math.random() > miss && (t.pl.gameMode === 0 || t.pl.gameMode === 2)) {
         t.pl.takeDamage({ damage: def.dmg, velocity: t.pl.position.minus(e.position).normalize().scaled(1.5) })
       }
@@ -279,11 +279,11 @@ module.exports = function installDuke (serv, bm) {
     const at = (u, v, y = G + 1) => new Vec3(ox + u + 0.5, y, oz + v + 0.5)
     const rnd = (n) => Math.floor(Math.random() * n)
     // street enemies
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 6; i++) {
       const alongU = Math.random() < 0.5
       const lane = rnd(4) * P + 2 + rnd(4)
       const pos = rnd(120) + 4
-      const kind = i < 5 ? 'trooper' : i < 8 ? 'pigcop' : 'octabrain'
+      const kind = i < 3 ? 'trooper' : i < 5 ? 'pigcop' : 'octabrain'
       duke.spawnEnemy(kind, alongU ? at(pos, lane) : at(lane, pos))
     }
     // pickups on sidewalks and in plazas
