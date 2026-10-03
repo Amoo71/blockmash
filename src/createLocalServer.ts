@@ -1,6 +1,9 @@
 import { LocalServer } from './customServer'
 
 const { createMCServer } = require('flying-squid/dist')
+// BlockMash world generator + gameplay plugins
+require('flying-squid/dist/lib/generations').blockmash = require('./mashup/generator')
+const installBlockMash = require('./mashup/serverPlugin')
 
 export const startLocalServer = (serverOptions) => {
   const passOptions = { ...serverOptions, Server: LocalServer }
@@ -9,6 +12,7 @@ export const startLocalServer = (serverOptions) => {
   server.options = passOptions
   //@ts-expect-error todo remove
   server.looseProtocolMode = true
+  if (passOptions.generation?.name === 'blockmash' || !passOptions.generation) installBlockMash(server)
   return server
 }
 

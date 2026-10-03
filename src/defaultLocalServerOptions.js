@@ -1,5 +1,5 @@
 module.exports = {
-  'motd': 'A Minecraft Server \nRunning flying-squid',
+  'motd': 'BlockMash',
   // host: '',
   // eslint-disable-next-line unicorn/numeric-separators-style
   'port': 25565,
@@ -16,7 +16,7 @@ module.exports = {
     // superflat
     // all_the_blocks
     // nether
-    'name': 'diamond_square',
+    'name': 'blockmash',
     options: {}
     // 'options': {
     //   'worldHeight': 80
@@ -27,8 +27,8 @@ module.exports = {
   'modpe': false,
   'view-distance': 2,
   'player-list-text': {
-    'header': 'Flying squid',
-    'footer': 'Test server'
+    'header': 'BlockMash',
+    'footer': 'singleplayer'
   },
   keepAlive: false,
   'everybody-op': true,

@@ -28,3 +28,17 @@ signpost pointing to the nearest zone of each type.
 - `src/mashup/*` – zone builders, entity/weapon logic as flying-squid plugins + client HUD.
 - Content from GPL games is reimplemented/adapted; data files are only used where their license allows
   redistribution (see ASSETS_AUDIT.md and credits.html).
+
+## Phase 2 status (implemented)
+- `src/mashup/generator.js` registered as flying-squid generation `blockmash` (default for new worlds).
+  Regions of 192×192; fixed zones around spawn: village (0,0), Duke city (1,0), Dark Mod (-1,0), Yorg (0,1).
+- Underground: stone with granite/diorite/andesite/dirt/gravel blobs, spaghetti + cheese caves, lava below y 10,
+  coal/iron/gold/redstone/lapis/diamond at vanilla-like depths, bedrock floor.
+- Surface: plains/forest/desert/snowy/beach/ocean biomes, oak/birch/spruce trees, grass, flowers, cacti, sugar cane, snow.
+- Villages: paths, well, bell, 12 houses with doors, windows, roofs, 4 farms (wheat/carrots/potatoes), lamp posts;
+  villagers, an iron golem and a cat are spawned by `src/mashup/serverPlugin.js`.
+- Mobs: animals in vanilla regions, night monsters (zombie/skeleton/creeper/spider) for survival players, simple AI
+  (wander / chase / melee / creeper fuse / golem defends). flying-squid has no vanilla AI, so this is our own.
+- Explosions: TNT can be lit with flint and steel → primed TNT → radius-4 explosion that breaks any block except bedrock/fluids,
+  chain-ignites TNT, damages and knocks back entities. `/mashup boom` for testing.
+- `/mashup where`, `/mashup tp <village|duke|darkmod|yorg|vanilla>`.
