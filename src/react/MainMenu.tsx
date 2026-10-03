@@ -70,7 +70,7 @@ export default ({ connectToServerAction, mapsProvider, singleplayerAction, optio
         <div className={styles.minec}></div>
         <div className={styles.raft}></div>
         <div className={styles.edition}></div>
-        <span className={styles.splash}>Prismarine is a beautiful block</span>
+        <span className={styles.splash}>Mine it. Blow it up. Build it.</span>
       </div>
 
       <div className={styles.menu}>
@@ -113,23 +113,15 @@ export default ({ connectToServerAction, mapsProvider, singleplayerAction, optio
         >
           Options
         </Button>
-        <div className={styles['menu-row']}>
-          <ButtonWithTooltip
-            initialTooltip={{
-              content: 'Report bugs or request features!',
-            }}
-            style={{ width: '98px' }}
-            onClick={githubAction}
-          >
-            GitHub
-          </ButtonWithTooltip>
-          <Button
-            style={{ width: '98px' }}
-            onClick={discordAction}
-          >
-            Discord
-          </Button>
-        </div>
+        <ButtonWithTooltip
+          initialTooltip={{
+            content: 'PureBDcraft, licenses and thanks',
+          }}
+          onClick={() => openURL('./credits.html', false)}
+          data-test-id='credits-button'
+        >
+          Credits & Licenses
+        </ButtonWithTooltip>
       </div>
 
       <div className={styles['bottom-info']}>
@@ -141,14 +133,14 @@ export default ({ connectToServerAction, mapsProvider, singleplayerAction, optio
           }}
           className={styles['product-info']}
         >
-          Prismarine Web Client {versionStatus}
+          BlockMash {versionStatus}
         </span>
         <span className={styles['product-description']}>
           <a style={{
             color: 'lightgray',
-            fontSize: 9,
-          }} href='https://privacy.mcraft.fun'>Privacy Policy</a>
-          <span>A Minecraft client in the browser!</span>
+            fontSize: 8,
+          }} href='https://bdcraft.net' target='_blank' rel='noreferrer'>Textures/3D Models/Sounds from PureBDcraft ResourcePack by https://bdcraft.net</a>
+          <span>Free non-commercial mashup · based on minecraft-web-client (MIT) · <a style={{ color: 'lightgray' }} href='./credits.html'>credits</a></span>
         </span>
       </div>
 

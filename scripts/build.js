@@ -35,8 +35,14 @@ exports.copyFiles = (dev = false) => {
     filesToCopy.forEach(file => {
         fsExtra.copySync(file.from, file.to)
     })
+    exports.postBuild()
 
     console.timeEnd('copy files')
+}
+
+// BlockMash: CC0 sound map + files (replaces upstream's Mojang sounds.js)
+exports.postBuild = () => {
+    require('child_process').execSync('node scripts/buildSounds.mjs', { stdio: 'inherit' })
 }
 
 exports.copyFilesDev = () => {

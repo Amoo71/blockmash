@@ -3,6 +3,7 @@ import { build } from 'esbuild'
 import { existsSync } from 'node:fs'
 import Module from "node:module"
 import { dirname } from 'node:path'
+import { execSync } from 'node:child_process'
 import supportedVersions from '../src/supportedVersions.mjs'
 
 if (existsSync('dist/mc-data') && !process.argv.includes('-f')) {
@@ -33,6 +34,7 @@ const versionToNumber = (ver) => {
   return +`${x.padStart(2, '0')}${y.padStart(2, '0')}${z.padStart(2, '0')}`
 }
 
+execSync('node scripts/buildLanguage.mjs', { stdio: 'inherit' })
 console.log('preparing data')
 console.time('data prepared')
 let builds = []
@@ -42,6 +44,11 @@ for (const [major, versions] of Object.entries(grouped)) {
   for (const [version, dataSet] of Object.entries(versions)) {
     contents += `    '${version}': {\n`
     for (const [dataType, dataPath] of Object.entries(dataSet)) {
+      if (dataType === 'language') {
+        // BlockMash: never bundle the Mojang en_us table, use our own (scripts/buildLanguage.mjs)
+        contents += `      get ${dataType} () { return require("${process.cwd()}/generated/language.json") },\n`
+        continue
+      }
       if (dataType === 'blockCollisionShapes' && versionToNumber(version) >= versionToNumber('1.13')) {
         contents += `      get ${dataType} () { return window.globalGetCollisionShapes?.("${version}") },\n`
         continue

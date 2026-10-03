@@ -4,7 +4,7 @@ import { join } from 'path'
 import { filesize } from 'filesize'
 import minecraftDataLoader from 'minecraft-data'
 import BlockLoader from 'prismarine-block'
-import { JsonAtlas, makeTextureAtlas, writeCanvasStream } from './atlas'
+import { JsonAtlas, makeTextureAtlas, writeCanvasStream, ITEM_TILE } from './atlas'
 import looksSame from 'looks-same' // ensure after canvas import
 import { Version as _Version } from 'minecraft-data'
 import { versionToNumber } from './utils'
@@ -27,6 +27,7 @@ function isCube (name) {
 }
 
 export type ItemsAtlasesOutputJson = {
+  tileSize?: number
   latest: JsonAtlas
   legacy: JsonAtlas
   legacyMap: [string, string[]][]
@@ -119,7 +120,7 @@ export const generateItemsAtlases = async () => {
     return {
       contents,
     }
-  }, undefined, 'remove')
+  }, undefined, 'remove', ITEM_TILE)
   const texturesPath = join(__dirname, '../../public/textures')
   writeCanvasStream(latestAtlas.canvas, join(texturesPath, 'items.png'), () => {
     console.log('Generated latest items atlas')
@@ -132,12 +133,13 @@ export const generateItemsAtlases = async () => {
     return {
       contents,
     }
-  }, undefined, 'remove')
+  }, undefined, 'remove', ITEM_TILE)
   writeCanvasStream(legacyItemsAtlas.canvas, join(texturesPath, 'items-legacy.png'), () => {
     console.log('Generated legacy items atlas')
   })
 
   const allItemsMaps: ItemsAtlasesOutputJson = {
+    tileSize: ITEM_TILE,
     latest: latestAtlas.json,
     legacy: legacyItemsAtlas.json,
     legacyMap: legacyItemsSortedEntries

@@ -26,7 +26,7 @@ html {
 }
 
 body {
-  --title-gui: url('minecraft-assets/minecraft-assets/data/1.17.1/gui/title/minecraft.png');
+  --title-gui: url('extra-textures/logo.png');
 }
 
 body.disable-assets {
@@ -49,7 +49,7 @@ body {
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
-  font-family: minecraft, mojangles, monospace;
+  font-family: blockmash, monospace;
   z-index: -5;
 }
 
@@ -108,14 +108,11 @@ body {
   border: var(--border);
 }
 
+/* BlockMash: Pixelify Sans (SIL OFL 1.1), replaces the Mojang-derived mojangles/minecraftia fonts */
 @font-face {
-  font-family: minecraft;
-  src: url(minecraftia.woff);
-}
-
-@font-face {
-  font-family: mojangles;
-  src: url(mojangles.ttf);
+  font-family: blockmash;
+  src: url(fonts/PixelifySans.ttf);
+  font-weight: 400 700;
 }
 
 #ui-root {

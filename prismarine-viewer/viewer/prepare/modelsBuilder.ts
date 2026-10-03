@@ -119,8 +119,8 @@ export const addBlockAllModel = (mcAssets: McAssets, name: string, texture = nam
 }
 
 function cleanupBlockName (name: string) {
-  if (name.startsWith('block') || name.startsWith('minecraft:block')) return name.split('/')[1]
-  return name
+  // block/stone -> stone, block/_bdc/stone_01 -> _bdc/stone_01
+  return name.replace(/^(minecraft:)?blocks?\//, '')
 }
 
 const objectAssignStrict = <T extends Record<string, any>> (target: T, source: Partial<T>) => Object.assign(target, source)
@@ -162,7 +162,8 @@ function prepareModel (model: BlockModel, texturesJson) {
   const getFinalTexture = (originalBlockName) => {
     // texture name e.g. blocks/anvil_base
     const cleanBlockName = cleanupBlockName(originalBlockName)
-    return { ...texturesJson[cleanBlockName], /* __debugName: cleanBlockName */ }
+    // BlockMash: never produce broken UVs, fall back to the missing texture
+    return { ...(texturesJson[cleanBlockName] ?? texturesJson['missing_texture']), /* __debugName: cleanBlockName */ }
   }
 
   const finalTextures = []
@@ -221,8 +222,15 @@ function prepareModel (model: BlockModel, texturesJson) {
   return model
 }
 
+const unresolvedModels = new Set<string>()
 function resolveModel (name, blocksModels, texturesJson) {
-  const model = getFinalModel(name, blocksModels)
+  let model = getFinalModel(name, blocksModels)
+  if (!model) {
+    // BlockMash: a (PureBDcraft) model chain could not be resolved -> missing texture cube
+    if (!unresolvedModels.has(name)) console.warn('unresolved model', name)
+    unresolvedModels.add(name)
+    model = getFinalModel('missing_texture', blocksModels)!
+  }
   return prepareModel(model, texturesJson.textures)
 }
 

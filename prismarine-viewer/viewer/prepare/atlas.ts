@@ -35,13 +35,16 @@ export type JsonAtlas = {
   }
 }
 
-export const makeTextureAtlas = (input: string[], getInputData: (name) => { contents: string, tileWidthMult?: number, origSizeTextures?}, tilesCount = input.length, suSvOptimize: 'remove' | null = null): {
+// BlockMash: tile size is configurable (PureBDcraft is 128x). Env BLOCK_TILE / ITEM_TILE.
+export const BLOCK_TILE = Number(process.env.BLOCK_TILE || 128)
+export const ITEM_TILE = Number(process.env.ITEM_TILE || 64)
+
+export const makeTextureAtlas = (input: string[], getInputData: (name) => { contents: string, tileWidthMult?: number, origSizeTextures?}, tilesCount = input.length, suSvOptimize: 'remove' | null = null, tileSize = BLOCK_TILE): {
   image: Buffer,
   canvas: Canvas,
   json: JsonAtlas
 } => {
   const texSize = nextPowerOfTwo(Math.ceil(Math.sqrt(tilesCount)))
-  const tileSize = 16
 
   const imgSize = texSize * tileSize
   const canvas = new Canvas(imgSize, imgSize, 'png' as any)
@@ -93,7 +96,12 @@ export const makeTextureAtlas = (input: string[], getInputData: (name) => { cont
       goToNextRow()
     }
 
-    g.drawImage(img, 0, 0, renderWidth, renderHeight, x, y, renderWidth, renderHeight)
+    if (inputData.origSizeTextures?.[keyValue]) {
+      g.drawImage(img, 0, 0, renderWidth, renderHeight, x, y, renderWidth, renderHeight)
+    } else {
+      // scale the first frame (square, width x width) into the tile; supports any source resolution
+      g.drawImage(img, 0, 0, img.width, img.width, x, y, renderWidth, renderHeight)
+    }
 
     const cleanName = keyValue.split('.').slice(0, -1).join('.') || keyValue
     texturesIndex[cleanName] = {
@@ -119,7 +127,8 @@ export const writeCanvasStream = (canvas, path, onEnd) => {
 
 export function makeBlockTextureAtlas (mcAssets: McAssets) {
   const blocksTexturePath = path.join(mcAssets.directory, '/blocks')
-  const textureFiles = fs.readdirSync(blocksTexturePath).filter(file => file.endsWith('.png'))
+  // recursive: PureBDcraft variant textures live in blocks/_bdc/**
+  const textureFiles = (fs.readdirSync(blocksTexturePath, { recursive: true }) as string[]).map(f => f.split(path.sep).join('/')).filter(file => file.endsWith('.png'))
   // const textureFiles = mostEncounteredBlocks.map(x => x + '.png')
   textureFiles.unshift(...localTextures)
 

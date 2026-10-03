@@ -19,7 +19,7 @@ const blockEntity = {
   "Text1": "{\"extra\":[{\"color\":\"dark_green\",\"text\":\"Minecraft \"},{\"text\":\"Tools\"}],\"text\":\"\"}"
 } as const
 
-await document.fonts.load('1em mojangles')
+await document.fonts.load('1em blockmash')
 
 const canvas = renderSign(blockEntity, PrismarineChat, (ctx) => {
   ctx.drawImage(img, 0, 0, ctx.canvas.width, ctx.canvas.height)

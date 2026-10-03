@@ -120,14 +120,14 @@ export const renderSign = (blockEntity: SignBlockEntity, PrismarineChat: typeof 
 
         const ctx = getCtx()
         const fontSize = 1.6 * factor;
-        ctx.font = `${fontSize}px mojangles`
+        ctx.font = `${fontSize}px blockmash`
         const textWidth = ctx.measureText(plainText).width
 
         let renderedWidth = 0
         for (const { fillStyle, fontStyle, strikeStyle, text, underlineStyle } of toRenderCanvas) {
             // todo strikeStyle, underlineStyle
             ctx.fillStyle = fillStyle
-            ctx.font = `${fontStyle} ${fontSize}px mojangles`
+            ctx.font = `${fontStyle} ${fontSize}px blockmash`
             ctx.fillText(text, (canvas!.width - textWidth) / 2 + renderedWidth, fontSize * (lineNum + 1))
             renderedWidth += ctx.measureText(text).width // todo isn't the font is monospace?
         }

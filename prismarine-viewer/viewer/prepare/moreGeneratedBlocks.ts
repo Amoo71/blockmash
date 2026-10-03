@@ -363,7 +363,7 @@ const handleExternalData = async (assetsPathRoot: string, version: string) => {
     .sort((a, b) => versionToNumber(b) - versionToNumber(a))
 
   const allAssetsVersions = fs.readdirSync(assetsPathRoot, { withFileTypes: true })
-    .filter(x => x.isDirectory())
+    .filter(x => x.isDirectory() || x.isSymbolicLink()) // BlockMash: version folders are aliases
     .map(x => x.name)
     .sort((a, b) => versionToNumber(b) - versionToNumber(a))
 

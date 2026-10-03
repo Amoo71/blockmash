@@ -91,6 +91,13 @@ const plugins = [
       }, () => {
         throw new Error('hit banned package')
       })
+      // BlockMash: the vanilla reference package must never end up in a bundle
+      build.onResolve({ filter: /mc-assets-reference/ }, () => {
+        throw new Error('BlockMash: mc-assets-reference (vanilla Mojang assets) must not be bundled')
+      })
+      build.onLoad({ filter: /[\\/]mc-assets-reference[\\/]|\.pnpm[\\/]minecraft-assets@/ }, (args) => {
+        throw new Error('BlockMash: vanilla Mojang asset reached the bundle: ' + args.path)
+      })
       build.onLoad({
         filter: /^prismarine-auth/,
       }, () => {

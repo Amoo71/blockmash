@@ -20,3 +20,15 @@ storybook-static
 server-jar
 
 src/react/npmReactComponents.ts
+
+# BlockMash
+.cache/
+vendor/purebdcraft/*.zip
+packages/free-mc-assets/minecraft-assets/
+# generated from PureBDcraft at install time (not redistributed in the repo)
+assets/invsprite.png
+assets/generic_9*.png
+assets/world_preview.png
+assets/extra-textures/background/
+assets/extra-textures/logo.png
+__pycache__/

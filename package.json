@@ -1,17 +1,17 @@
 {
-  "name": "minecraft-web-client",
+  "name": "blockmash",
   "version": "0.0.0-dev",
-  "description": "A minecraft client running in a browser",
+  "description": "BlockMash: a free, non-commercial browser block-game mashup based on zardoy/minecraft-web-client (MIT). Ships no Mojang assets.",
   "scripts": {
     "start": "node scripts/build.js copyFilesDev && node scripts/prepareData.mjs && node esbuild.mjs --watch",
     "start-watch-script": "nodemon -w esbuild.mjs --watch",
-    "build": "node scripts/build.js copyFiles && node scripts/prepareData.mjs -f && node esbuild.mjs --minify --prod",
+    "build": "node scripts/build.js copyFiles && node scripts/prepareData.mjs -f && node esbuild.mjs --minify --prod && node scripts/build.js postBuild && pnpm verify-assets",
     "check-build": "tsc && pnpm build",
     "test:cypress": "cypress run",
     "test-unit": "vitest",
     "test:e2e": "start-test http-get://localhost:8080 test:cypress",
     "prod-start": "node server.js",
-    "postinstall": "node scripts/gen-texturepack-files.mjs && tsx scripts/optimizeBlockCollisions.ts",
+    "postinstall": "pnpm free-assets && pnpm gen-textures && python3 tools/free-assets/build_ui_assets.py && node scripts/gen-texturepack-files.mjs && tsx scripts/optimizeBlockCollisions.ts",
     "test-mc-server": "tsx cypress/minecraft-server.mjs",
     "lint": "eslint \"{src,cypress}/**/*.{ts,js,jsx,tsx}\"",
     "storybook": "storybook dev -p 6006",
@@ -22,7 +22,11 @@
     "run-playground": "run-p watch-mesher watch-other-workers playground-server watch-playground",
     "run-all": "run-p start run-playground",
     "playground-server": "live-server --port=9090 prismarine-viewer/public",
-    "watch-playground": "node prismarine-viewer/esbuild.mjs -w"
+    "watch-playground": "node prismarine-viewer/esbuild.mjs -w",
+    "free-assets": "python3 tools/free-assets/build_free_assets.py",
+    "gen-textures": "pnpm --dir prismarine-viewer generate-textures -f",
+    "verify-assets": "python3 tools/free-assets/verify_no_mojang.py",
+    "start-singleplayer": "node server.js 8720"
   },
   "keywords": [
     "prismarine",
@@ -69,7 +73,7 @@
     "iconify-icon": "^1.0.8",
     "jszip": "^3.10.1",
     "lodash-es": "^4.17.21",
-    "minecraft-assets": "^1.12.2",
+    "minecraft-assets": "link:./packages/free-mc-assets",
     "minecraft-data": "3.65.0",
     "minecraft-protocol": "github:PrismarineJS/node-minecraft-protocol",
     "mineflayer-item-map-downloader": "github:zardoy/mineflayer-item-map-downloader",
@@ -146,7 +150,8 @@
     "timers-browserify": "^2.0.12",
     "typescript": "5.5.0-beta",
     "vitest": "^0.34.6",
-    "yaml": "^2.3.2"
+    "yaml": "^2.3.2",
+    "mc-assets-reference": "npm:minecraft-assets@1.12.2"
   },
   "optionalDependencies": {
     "systeminformation": "^5.21.22"
@@ -155,14 +160,15 @@
     "overrides": {
       "@nxg-org/mineflayer-physics-util": "1.5.8",
       "three": "0.154.0",
-      "diamond-square": "github:zardoy/diamond-square",
-      "prismarine-block": "github:zardoy/prismarine-block#next-era",
-      "prismarine-world": "github:zardoy/prismarine-world#next-era",
+      "diamond-square": "github:zardoy/diamond-square#4bbe28dcad35403abaa925055e91f601a61b9015",
+      "prismarine-block": "github:zardoy/prismarine-block#dd4954fff3b334f8ce063d18e39b2e9414ece5b8",
+      "prismarine-world": "github:zardoy/prismarine-world#187a87f6d71cba12881a7bbaa510ed9085bf6da7",
       "minecraft-data": "3.65.0",
       "prismarine-provider-anvil": "github:zardoy/prismarine-provider-anvil#everything",
       "minecraft-protocol": "github:PrismarineJS/node-minecraft-protocol",
       "react": "^18.2.0",
-      "prismarine-chunk": "github:zardoy/prismarine-chunk"
+      "prismarine-chunk": "github:zardoy/prismarine-chunk#9662306deea57d8d0ba0a2a3f3f7adb95f0131e3",
+      "minecraft-assets": "link:./packages/free-mc-assets"
     },
     "updateConfig": {
       "ignoreDependencies": []
@@ -172,5 +178,5 @@
       "three@0.154.0": "patches/three@0.154.0.patch"
     }
   },
-  "packageManager": "pnpm@9.0.4"
+  "packageManager": "pnpm@9.15.9"
 }

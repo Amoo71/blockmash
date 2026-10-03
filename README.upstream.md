@@ -1,6 +1,6 @@
 # Minecraft Web Client
 
-![banner](./docs-assets/banner.jpg)
+<!-- banner image removed in BlockMash (contained Mojang artwork) -->
 
 Minecraft **clone** written in TypeScript using the best modern web technologies. A vanilla-compatible client and integrated server packaged into a single web app.
 
@@ -14,7 +14,7 @@ Don't confuse this with [Eaglercraft](https://eagsrc.webmc.xyz) which is a REAL 
 
 > **UI Design Philosophy**: For now, this project follows classic Minecraft UI guidelines. But if you want to see my **unleashed vision** of the most beautiful UI with stunning animations and futuristic design - check out **[arwes.mcraft.fun](https://arwes.mcraft.fun)**!
 >
-> [![Arwes UI - My Ultimate Vision](./docs-assets/arwes-banner.webp)](https://arwes.mcraft.fun)
+> (Arwes UI banner image removed in BlockMash: https://arwes.mcraft.fun)
 
 For building the project yourself / contributing, see [Development, Debugging & Contributing](#development-debugging--contributing). For reference at what and how web technologies / frameworks are used, see [TECH.md](./TECH.md) (also for comparison with Eaglercraft).
 
@@ -74,7 +74,7 @@ Zip files and folders are supported. Just drag and drop them into the browser wi
 When opening zip files, they are stored entirely in your RAM. There is a ~300 MB file limit on iOS.
 Whatever offline mode you used (zip, folder, just singleplayer), you can always export world with the `/export` command typed in the game chat.
 
-![docs-assets/singleplayer-future-city-1-10-2.jpg](./docs-assets/singleplayer-future-city-1-10-2.jpg)
+<!-- screenshot removed in BlockMash (contained Mojang artwork) -->
 
 ### Servers & Proxy
 

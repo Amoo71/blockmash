@@ -10,9 +10,12 @@ import { versionToNumber } from './utils'
 const publicPath = path.resolve(__dirname, '../../public')
 
 const texturesPath = path.join(publicPath, 'textures')
+// BlockMash: always start clean so no stale (vanilla) atlases survive
+fs.rmSync(texturesPath, { recursive: true, force: true })
 fs.mkdirSync(texturesPath, { recursive: true })
 
 const blockStatesPath = path.join(publicPath, 'blocksStates')
+fs.rmSync(blockStatesPath, { recursive: true, force: true })
 fs.mkdirSync(blockStatesPath, { recursive: true })
 
 const warnings = new Set<string>()

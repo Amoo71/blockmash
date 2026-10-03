@@ -268,11 +268,13 @@ const renderSlot = (slot: RenderSlot, skipBlock = false): { texture: string, blo
 
   if (isItem) {
     const legacyItemVersion = getItemVerToRender(version, itemName, itemsAtlases.legacyMap)
-    const vuToSlice = ({ u, v }, size) => [...svSuToCoordinates('items', u, v, size).slice(0, 2), 16, 16] // item size is fixed
+    const itemTile = itemsAtlases.tileSize ?? 16
+    const vuToSlice = ({ u, v }, size) => [...svSuToCoordinates('items', u, v, size).slice(0, 2), itemTile, itemTile] // item size is fixed (BlockMash: ITEM_TILE)
     if (legacyItemVersion) {
       const textureData = itemsAtlases.legacy.textures[`${legacyItemVersion}-${itemName}`]!
       return {
         texture: 'items-legacy',
+        scale: 16 / itemTile,
         slice: vuToSlice(textureData, itemsAtlases.legacy.size)
       }
     }
@@ -280,6 +282,7 @@ const renderSlot = (slot: RenderSlot, skipBlock = false): { texture: string, blo
     if (textureData) {
       return {
         texture: 'items',
+        scale: 16 / itemTile,
         slice: vuToSlice(textureData, itemsAtlases.latest.size)
       }
     }

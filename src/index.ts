@@ -177,7 +177,7 @@ new THREE.TextureLoader().load(itemsPng, (texture) => {
   }
 })
 viewer.entities.entitiesOptions = {
-  fontFamily: 'mojangles'
+  fontFamily: 'blockmash'
 }
 watchOptionsAfterViewerInit()
 watchTexturepackInViewer(viewer)
@@ -367,9 +367,9 @@ async function connect (connectOptions: ConnectOptions) {
         // ignore cache hit
         versionsByMinecraftVersion.pc[lastVersion]!['dataVersion']!++
       }
-      if (!document.fonts.check('1em mojangles')) {
+      if (!document.fonts.check('1em blockmash')) {
         // todo instead re-render signs on load
-        await document.fonts.load('1em mojangles').catch(() => { })
+        await document.fonts.load('1em blockmash').catch(() => { })
       }
       setLoadingScreenStatus(`Downloading data for ${version}`)
       await downloadSoundsIfNeeded()

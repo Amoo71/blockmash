@@ -14,32 +14,26 @@
     top: 0;
     left: 0;
     background-image: var(--title-gui);
-    background-size: 256px;
-    width: 155px;
-    height: 44px;
+    background-size: 310px 60px;
+    background-repeat: no-repeat;
+    width: 310px;
+    height: 60px;
 }
 
 .game-title .raft {
-    display: block;
-    position: absolute;
-    top: 0;
-    left: 155px;
-    background-image: var(--title-gui);
-    background-size: 256px;
-    width: 155px;
-    height: 44px;
-    background-position-y: -45px;
+    display: none;
 }
 
 .game-title .edition {
     display: block;
     position: absolute;
-    top: 37px;
-    left: calc(88px + 5px);
+    top: 50px;
+    left: 91px;
     background-image: url('extra-textures/edition.png');
-    background-size: 128px;
-    width: 88px;
-    height: 14px;
+    background-size: 128px 16px;
+    background-repeat: no-repeat;
+    width: 128px;
+    height: 16px;
 }
 
 .splash {

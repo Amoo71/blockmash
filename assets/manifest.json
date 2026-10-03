@@ -1,6 +1,6 @@
 {
-    "name": "Prismarine Web Client",
-    "short_name": "Prismarine Web Client",
+    "name": "BlockMash",
+    "short_name": "BlockMash",
     "scope": "./",
     "start_url": "./",
     "icons": [

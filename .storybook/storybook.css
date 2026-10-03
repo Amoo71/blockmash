@@ -2,7 +2,7 @@
     content: "";
     position: fixed;
     inset: 0;
-    background-image: url("../assets/storybook-bg.jpg");
+    background-image: url("../assets/loading-bg.jpg");
     background-size: cover;
     background-position: center;
 }
