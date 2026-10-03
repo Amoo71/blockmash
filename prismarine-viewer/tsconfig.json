@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "strictNullChecks": true,
+    "experimentalDecorators": true
+  },
+  "files": [
+    "index.d.ts"
+  ]
+}
