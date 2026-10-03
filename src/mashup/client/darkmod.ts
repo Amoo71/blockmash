@@ -17,7 +17,7 @@ export async function initDarkMod () {
   const TOOL_ITEMS = new Set(['music_disc_mellohi', 'music_disc_stal', 'music_disc_strad', 'music_disc_ward', 'music_disc_11', 'music_disc_wait'])
 
   const box = document.createElement('div')
-  box.style.cssText = 'position:fixed;left:50%;bottom:64px;transform:translateX(-50%);display:none;flex-direction:column;align-items:center;pointer-events:none;z-index:5;font:14px blockmash,sans-serif;color:#d8c9a0;text-shadow:1px 1px #000'
+  box.style.cssText = 'position:fixed;left:50%;bottom:92px;transform:translateX(-50%);display:none;flex-direction:column;align-items:center;pointer-events:none;z-index:5;font:14px blockmash,sans-serif;color:#d8c9a0;text-shadow:1px 1px #000'
   const gem = document.createElement('img'); gem.style.cssText = 'width:96px;height:48px;object-fit:contain'
   const info = document.createElement('div')
   box.append(gem, info); document.body.append(box)
@@ -58,12 +58,26 @@ export async function initDarkMod () {
     })
   }
 
+  // touch: USE button for thief tools (blackjack = normal tap-attack, spyglass is passive)
+  const useBtn = document.createElement('div')
+  useBtn.textContent = 'USE'
+  useBtn.style.cssText = 'position:fixed;right:110px;bottom:150px;width:70px;height:70px;border-radius:50%;background:rgba(150,120,60,.6);color:#fff;font:bold 15px blockmash,sans-serif;display:none;align-items:center;justify-content:center;z-index:30;user-select:none;touch-action:none'
+  document.body.append(useBtn)
+  useBtn.addEventListener('touchstart', (e) => {
+    e.preventDefault(); e.stopPropagation()
+    const b = (bot as any).blockAtCursor?.(4)
+    if (bot.heldItem?.name === 'music_disc_11' && b) void bot.activateBlock(b).catch(() => {})
+    else bot.activateItem()
+  })
+  const TOUCH_USE = new Set(['music_disc_stal', 'music_disc_strad', 'music_disc_ward', 'music_disc_11'])
   let baseFov: number | null = null
   const loop = () => {
     requestAnimationFrame(loop)
     if (!bot?.entity) return
     hook()
     const held = bot.heldItem?.name
+    const touch = !!(window as any).miscUiState?.currentTouch || matchMedia('(pointer: coarse)').matches
+    useBtn.style.display = touch && held && TOUCH_USE.has(held) ? 'flex' : 'none'
     const show = !!hud && (hud.quarter || (held && TOOL_ITEMS.has(held)))
     box.style.display = show ? 'flex' : 'none'
     if (show) {
