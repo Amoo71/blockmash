@@ -274,6 +274,7 @@ module.exports = function installBlockMash (serv) {
 
   require('./duke')(serv, bm)
   require('./darkmod')(serv, bm)
+  require('./yorg')(serv, bm)
 
   const iv1 = setInterval(aiTick, 150)
   const iv2 = setInterval(() => { for (const pl of serv.players) { populate(pl).catch(() => {}); nightSpawns(pl).catch(() => {}) } }, 3000)

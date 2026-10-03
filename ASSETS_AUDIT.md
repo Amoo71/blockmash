@@ -67,3 +67,9 @@ Correction to the original brief: "shareware data is redistributable" only holds
 - Output (gitignored): `assets/darkmod/` – 12 tool/loot icons, 16 light-gem frames, 24 sounds, `LICENSE-TheDarkMod.txt`, `manifest.json` (source path per file); music-disc item icons in `packages/free-mc-assets` are patched.
 - Licence: CC BY-NC-SA 3.0. Compatible with a non-commercial project when attributed; derived files (converted icons) must stay CC BY-NC-SA. Nothing of TDM is committed to the repo.
 - Code (`src/mashup/darkmod.js`, `src/mashup/client/darkmod.ts`) is original.
+
+### Yorg (phase 5)
+- Source: `https://raw.githubusercontent.com/cflavio/yorg/master/` (override with `YORG_REV`), fetched by `tools/yorg/fetch_yorg.py` in `postinstall`, cache `.cache/yorg`.
+- Output (gitignored): `assets/yorg/` – per car `mesh.json` (body + wheels converted from `.egg`, Z-up→Y-up, wheel slots from `capsule.egg` empties), `car.jpg`/`wheel.jpg` (≤512 px), `sel.png`; 9 sounds; `LICENSES-Yorg.txt` (upstream licence + sound attributions); `manifest.json`. The `knowledge_book` item icon ("Yorg Kart Key") is patched with the kronos selection image.
+- Licence: Ya2 art CC BY-SA (itch.io lists 4.0), sounds CC per `licenses/licenses.txt`; code GPLv3 – not used, our kart code is original MIT. CC BY-SA allows redistribution incl. commercial use with attribution + share-alike, so this is the least restrictive of the mashup sources.
+- Without the data the game falls back to coloured box karts.

@@ -11,7 +11,7 @@
     "test-unit": "vitest",
     "test:e2e": "start-test http-get://localhost:8080 test:cypress",
     "prod-start": "node server.js",
-    "postinstall": "pnpm free-assets && python3 tools/duke3d/extract_duke.py && python3 tools/darkmod/fetch_darkmod.py && pnpm gen-textures && python3 tools/free-assets/build_ui_assets.py && node scripts/gen-texturepack-files.mjs && tsx scripts/optimizeBlockCollisions.ts",
+    "postinstall": "pnpm free-assets && python3 tools/duke3d/extract_duke.py && python3 tools/darkmod/fetch_darkmod.py && python3 tools/yorg/fetch_yorg.py && pnpm gen-textures && python3 tools/free-assets/build_ui_assets.py && node scripts/gen-texturepack-files.mjs && tsx scripts/optimizeBlockCollisions.ts",
     "test-mc-server": "tsx cypress/minecraft-server.mjs",
     "lint": "eslint \"{src,cypress}/**/*.{ts,js,jsx,tsx}\"",
     "storybook": "storybook dev -p 6006",
