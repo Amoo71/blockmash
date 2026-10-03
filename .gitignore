@@ -32,3 +32,5 @@ assets/world_preview.png
 assets/extra-textures/background/
 assets/extra-textures/logo.png
 __pycache__/
+vendor/duke3d/
+assets/duke/

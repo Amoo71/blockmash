@@ -55,7 +55,7 @@ module.exports = function installBlockMash (serv) {
   bm.spawn = (name, pos, opts = {}) => {
     const id = E(name)
     if (id === undefined) return null
-    const m = serv.spawnMob(id, serv.overworld, pos.clone(), { yaw: Math.random() * 360 })
+    const m = serv.spawnMob(id, serv.overworld, pos.clone(), { yaw: Math.floor(Math.random() * 256) - 128 })
     m.health = opts.health ?? ({ iron_golem: 100, villager: 20, zombie: 20, skeleton: 20, creeper: 20, spider: 16 }[name] ?? 10)
     m.size = name === 'iron_golem' ? new Vec3(1.4, 2.7, 1.4) : m.size
     mobs.set(m.id, { name, kind: opts.kind || 'passive', home: pos.clone(), dir: null, next: 0, cooldown: 0, ...opts })
@@ -122,7 +122,10 @@ module.exports = function installBlockMash (serv) {
     const dx = target.x - e.position.x; const dz = target.z - e.position.z
     const len = Math.hypot(dx, dz) || 1
     e.velocity.x = dx / len * speed; e.velocity.z = dz / len * speed
-    e.yaw = (Math.atan2(-dx, dz) * 180 / Math.PI + 360) % 360
+    let b = Math.round(Math.atan2(-dx, dz) * 128 / Math.PI)
+    if (b > 127) b -= 256
+    if (b < -128) b += 256
+    e.yaw = b
   }
   bm.moveTowards = moveTowards
   bm.nearestPlayer = nearestPlayer
@@ -268,6 +271,8 @@ module.exports = function installBlockMash (serv) {
       return 'Unknown subcommand'
     }
   })
+
+  require('./duke')(serv, bm)
 
   const iv1 = setInterval(aiTick, 150)
   const iv2 = setInterval(() => { for (const pl of serv.players) { populate(pl).catch(() => {}); nightSpawns(pl).catch(() => {}) } }, 3000)
