@@ -14,8 +14,8 @@ from dukegrp import open_grp, palette, tiles, tile_image, tile_offset, SHAREWARE
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 ZIP = os.environ.get('DUKE3D_SHAREWARE_ZIP', os.path.join(ROOT, 'vendor', 'duke3d', '3dduke13.zip'))
 URL = 'https://archive.org/download/3dduke13/3dduke13.zip'
-OUT = os.path.join(ROOT, 'assets', 'duke')
-ITEMS = os.path.join(ROOT, 'packages', 'free-mc-assets', 'minecraft-assets', 'data', '1.14.4', 'items')
+OUT = os.environ.get('DUKE3D_OUT', os.path.join(ROOT, 'assets', 'duke'))
+ITEMS = os.environ.get('DUKE3D_ITEMS') or os.path.join(ROOT, 'packages', 'free-mc-assets', 'minecraft-assets', 'data', '1.14.4', 'items')
 
 RANGES = [(21, 62), (100, 116), (1680, 1780), (1820, 1856), (1890, 1911), (1960, 1974), (2000, 2062), (2066, 2080),
           (2521, 2620), (2630, 2687), (2440, 2442), (2472, 2482), (2497, 2500), (2930, 2950)]
@@ -49,6 +49,21 @@ def icon(img, size=64):
     sq.paste(img, ((s - w) // 2, (s - h) // 2))
     return sq.resize((size, size), Image.NEAREST)
 
+def voc_to_wav(data, dst):
+    """Pure-Python Creative VOC (8-bit PCM) -> WAV, used when ffmpeg is not installed."""
+    import struct, wave
+    pos = struct.unpack_from('<H', data, 20)[0]; rate = 11025; pcm = bytearray(); bits = 8
+    while pos < len(data):
+        t = data[pos]
+        if t == 0: break
+        size = data[pos + 1] | data[pos + 2] << 8 | data[pos + 3] << 16; body = data[pos + 4:pos + 4 + size]
+        if t == 1: rate = int(1000000 / (256 - body[0])); pcm += body[2:]
+        elif t == 2: pcm += body
+        elif t == 9: rate, bits = struct.unpack_from('<IB', body, 0); pcm += body[12:]
+        pos += 4 + size
+    with wave.open(dst, 'wb') as w:
+        w.setnchannels(1); w.setsampwidth(bits // 8); w.setframerate(rate); w.writeframes(bytes(pcm))
+
 def main():
     if os.environ.get('BLOCKMASH_NO_DUKE') or not fetch():
         return
@@ -74,18 +89,21 @@ def main():
                 continue
             src = os.path.join(tmp, name)
             open(src, 'wb').write(files[name])
-            subprocess.run(['ffmpeg', '-loglevel', 'error', '-y', '-i', src, '-ac', '1', '-c:a', 'libvorbis', '-q:a', '4',
-                            os.path.join(OUT, 'sounds', s.lower() + '.ogg')], check=True)
+            if shutil.which('ffmpeg'):
+                subprocess.run(['ffmpeg', '-loglevel', 'error', '-y', '-i', src, '-ac', '1', '-c:a', 'libvorbis', '-q:a', '4',
+                                os.path.join(OUT, 'sounds', s.lower() + '.ogg')], check=True)
+            else:
+                voc_to_wav(files[name], os.path.join(OUT, 'sounds', s.lower() + '.wav'))
     if os.path.isdir(ITEMS):
         for item, tile in ITEM_ICONS.items():
             if tile in T:
                 icon(tile_image(T[tile], pal)).save(os.path.join(ITEMS, item + '.png'))
     json.dump({'source': 'Duke Nukem 3D shareware v1.3d (3dduke13.zip, md5 ' + SHAREWARE_MD5 + ')',
                'notice': 'Extracted locally from the unmodified shareware episode. (c) 1996 3D Realms. Do not redistribute.',
-               'tiles': meta, 'sounds': sorted(s.lower() for s in SOUNDS if s + '.VOC' in files)},
+               'tiles': meta, 'soundExt': 'ogg' if shutil.which('ffmpeg') else 'wav', 'sounds': sorted(s.lower() for s in SOUNDS if s + '.VOC' in files)},
               open(os.path.join(OUT, 'manifest.json'), 'w'))
     open(os.path.join(OUT, 'LICENSE-3DREALMS-SHAREWARE.TXT'), 'wb').write(shr.read('LICENSE.TXT'))
-    print(f'duke3d: {len(meta)} sprites, {len(os.listdir(os.path.join(OUT, "sounds")))} sounds -> assets/duke')
+    print(f'duke3d: {len(meta)} sprites, {len(os.listdir(os.path.join(OUT, "sounds")))} sounds -> {OUT}')
 
 if __name__ == '__main__':
     main()

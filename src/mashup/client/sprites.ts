@@ -15,7 +15,7 @@ export const tex = (url: string) => {
   return t
 }
 
-export type Manifest = { tiles: Record<string, { w: number, h: number, off: [number, number] }>, sounds: string[] }
+export type Manifest = { tiles: Record<string, { w: number, h: number, off: [number, number] }>, sounds: string[], soundExt?: string }
 
 export function makeSprite (m: Manifest, base: string, tile: number, pxPerBlock = 40) {
   const mat = new THREE.SpriteMaterial({ map: tex(`${base}/tiles/${tile}.png`), transparent: true, alphaTest: 0.4, depthWrite: true })

@@ -184,6 +184,37 @@ def build_world_preview():
     out.alpha_composite(icon, (16, 16))
     out.save(os.path.join(ASSETS, 'world_preview.png'))
 
+# ------------------------------------------------------------------ clean hotbar (own drawing)
+def build_hotbar():
+    """PureBDcraft's hand-drawn hotbar has tilted slots + a pentagon selector that look broken at
+    small sizes; draw a clean, straight hotbar/selector/offhand into the widgets sheets instead."""
+    for ver in ('1.17.1', '1.14.4', '1.16.4'):
+        p = os.path.join(ROOT, 'packages', 'free-mc-assets', 'minecraft-assets', 'data', ver, 'gui', 'widgets.png')
+        if not os.path.exists(p): continue
+        im = Image.open(p).convert('RGBA'); sc = im.width // 256
+        d = ImageDraw.Draw(im)
+        def R(x0, y0, x1, y1, **kw): d.rectangle([x0 * sc, y0 * sc, x1 * sc - 1, y1 * sc - 1], **kw)
+        R(0, 0, 182, 22, fill=(0, 0, 0, 0))
+        R(0, 0, 182, 22, fill=(48, 40, 34, 230))
+        R(0, 0, 182, 1, fill=(120, 104, 86, 255)); R(0, 21, 182, 22, fill=(20, 16, 12, 255))
+        R(0, 0, 1, 22, fill=(120, 104, 86, 255)); R(181, 0, 182, 22, fill=(20, 16, 12, 255))
+        for i in range(9):
+            x = 3 + i * 20
+            R(x - 1, 2, x + 17, 20, fill=(24, 20, 16, 255))
+            R(x, 3, x + 16, 19, fill=(70, 62, 54, 255))
+            R(x, 3, x + 16, 4, fill=(36, 30, 24, 255)); R(x, 3, x + 1, 19, fill=(36, 30, 24, 255))
+        # selector 24x24 at (0,22)
+        R(0, 22, 24, 46, fill=(0, 0, 0, 0))
+        for k, c in ((0, (40, 26, 8, 255)), (1, (255, 214, 90, 255)), (2, (255, 240, 170, 255))):
+            R(k, 22 + k, 24 - k, 23 + k, fill=c); R(k, 45 - k, 24 - k, 46 - k, fill=c)
+            R(k, 22 + k, k + 1, 46 - k, fill=c); R(23 - k, 22 + k, 24 - k, 46 - k, fill=c)
+        # offhand slots (24,22,29x24) and (53,22,29x24)
+        for ox in (24, 53):
+            R(ox, 22, ox + 29, 46, fill=(0, 0, 0, 0))
+            R(ox, 23, ox + 22, 45, fill=(48, 40, 34, 230)); R(ox + 3, 26, ox + 19, 42, fill=(70, 62, 54, 255))
+        im.save(p)
+        print('hotbar redrawn', p)
+
 if __name__ == '__main__':
     build_invsprite()
     build_world_preview()
@@ -192,4 +223,5 @@ if __name__ == '__main__':
     build_logo()
     build_panorama()
     build_click()
+    build_hotbar()
     print('ui assets done')

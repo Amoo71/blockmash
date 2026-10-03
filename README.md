@@ -14,3 +14,13 @@ CI=true npx -y pnpm@9.15.9 install     # generates textures from PureBDcraft
 npx -y pnpm@9.15.9 build               # includes the no-Mojang-asset check
 node server.js 8720                    # open http://localhost:8720/?singleplayer=1
 ```
+
+## Local release zip (phase 6)
+`bash tools/release/make_release.sh` → `release/BlockMash-local-0.6.0.zip` (~24.8 MB, gitignored).
+Contains `www/` (prod build), `start-windows.bat`, `start-mac.command`, `start-linux.sh` (Node ≥ 18 or Python 3, no
+install, offline), an optional `electron/` wrapper (`npm install && npm start`), `get-duke-shareware.py` and `licenses/`.
+**Local use only – do not redistribute** (PureBDcraft terms, The Dark Mod CC BY-NC-SA). Duke Nukem 3D shareware data is
+never included; `get-duke-shareware.py` extracts it from the unmodified `3dduke13.zip` on the user's machine.
+
+In-game: `/mashup tp duke|darkmod|yorg|village`, `/duke give`, `/darkmod give`, `/yorg race 3`, `/yorg give`.
+Screenshots: `docs/screenshots/phase1` … `phase6`.

@@ -38,7 +38,7 @@ export async function initDuke () {
     let vol = 1
     if (at && bot?.entity) vol = Math.max(0, 1 - bot.entity.position.distanceTo(at as any) / 48)
     if (vol <= 0.02) return
-    const a = new Audio(`${BASE}/sounds/${name}.ogg`)
+    const a = new Audio(`${BASE}/sounds/${name}.${manifest.soundExt ?? "ogg"}`)
     a.volume = vol * 0.8
     void a.play().catch(() => {})
   }
