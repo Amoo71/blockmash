@@ -34,3 +34,4 @@ assets/extra-textures/logo.png
 __pycache__/
 vendor/duke3d/
 assets/duke/
+assets/darkmod/

@@ -82,5 +82,17 @@
  "item.minecraft.firework_star": "Pipebomb (Duke)",
  "item.minecraft.nautilus_shell": "Ammo Crate (Duke)",
  "item.minecraft.heart_of_the_sea": "Medkit (Duke)",
- "item.minecraft.nether_star": "Atomic Health (Duke)"
+ "item.minecraft.nether_star": "Atomic Health (Duke)",
+ "item.minecraft.music_disc_13": "Gold Coins (Dark Mod loot)",
+ "item.minecraft.music_disc_cat": "Golden Chalice (Dark Mod loot)",
+ "item.minecraft.music_disc_blocks": "Diamond Ring (Dark Mod loot)",
+ "item.minecraft.music_disc_chirp": "Ruby (Dark Mod loot)",
+ "item.minecraft.music_disc_far": "Golden Necklace (Dark Mod loot)",
+ "item.minecraft.music_disc_mall": "Lion Statuette (Dark Mod loot)",
+ "item.minecraft.music_disc_mellohi": "Blackjack (Dark Mod)",
+ "item.minecraft.music_disc_stal": "Broadhead Arrows (Dark Mod)",
+ "item.minecraft.music_disc_strad": "Water Arrows (Dark Mod)",
+ "item.minecraft.music_disc_ward": "Flashbombs (Dark Mod)",
+ "item.minecraft.music_disc_11": "Lockpicks (Dark Mod)",
+ "item.minecraft.music_disc_wait": "Spyglass (Dark Mod)"
 }

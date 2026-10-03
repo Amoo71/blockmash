@@ -61,3 +61,9 @@ Git history was rewritten so the upstream Mojang-derived files never appear in a
 | Gameplay code (`src/mashup/duke.js`, `src/mashup/client/duke.ts`, `tools/duke3d/*.py`) | own code, behaviour modelled on the GPL-2.0 Duke3D source (tile numbers, weapon set, remote pipebombs) | MIT (own), no GPL code copied |
 
 Correction to the original brief: "shareware data is redistributable" only holds for the unmodified package; extracted sprites/sounds are not.
+
+### The Dark Mod (phase 4)
+- Source: official TDM zipsync mirror `https://update.thedarkmod.com/zipsync/release/release200/` – only single members are range-requested from the pk4s by `tools/darkmod/fetch_darkmod.py` (run in `postinstall`, cache in `.cache/darkmod`).
+- Output (gitignored): `assets/darkmod/` – 12 tool/loot icons, 16 light-gem frames, 24 sounds, `LICENSE-TheDarkMod.txt`, `manifest.json` (source path per file); music-disc item icons in `packages/free-mc-assets` are patched.
+- Licence: CC BY-NC-SA 3.0. Compatible with a non-commercial project when attributed; derived files (converted icons) must stay CC BY-NC-SA. Nothing of TDM is committed to the repo.
+- Code (`src/mashup/darkmod.js`, `src/mashup/client/darkmod.ts`) is original.
