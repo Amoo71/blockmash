@@ -49,6 +49,7 @@ export async function buildDukeMap (dm: any, base: string, tiles: Record<string,
   let solid = new GeoBuilder(true); let masked = new GeoBuilder(true)
   // moving sectors (doors, lifts, bridges): drawn as separate small meshes that are rebuilt while they move
   const DYN = new Set<number>(); S.forEach((s: any, si: number) => { if (DYN_LOTAGS.has(s.lotag)) DYN.add(si) })
+  for (const sp of m.sprites ?? []) if (sp.pic === 1 && sp.lotag === 13 && sp.sect >= 0) DYN.add(sp.sect) // C-9 walls
   const intoDyn = new Map<number, Array<[number, number]>>() // dyn sector -> walls of other sectors facing it
   let noLights = false
   const fz = (si: number, bx: number, by: number) => dm.floorZ(si, bx, by)
@@ -103,7 +104,7 @@ export async function buildDukeMap (dm: any, base: string, tiles: Record<string,
         const nx = -(w2.y - w.y); const ny = w2.x - w.x; const l = Math.hypot(nx, ny) || 1
         lightOf(w.cstat & 16 ? w.opic : w.pic, w.shade, X((w.x + w2.x) / 2 + nx / l * 300), Y(zm), Z((w.y + w2.y) / 2 + ny / l * 300))
       }
-      if (w.ns < 0 && s.__open && DYN_LOTAGS.has(s.lotag)) return // open swinging/sliding door: the panels are gone
+      if (w.ns < 0 && s.__open && DYN.has(si)) return // open swinging/sliding door: the panels are gone
       if (w.ns < 0) {
         // walls under a parallax sky: Build draws them up to the (very high) sky ceiling; cap them at ~12 blocks
         const cap = s.cstat & 1 ? Math.min(fa, fb) - 12 * 8192 : -Infinity

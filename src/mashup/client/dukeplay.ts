@@ -4,7 +4,7 @@
 // controller lets go and vanilla physics takes over (you fall into the Minecraft world below).
 import { inHole } from './surfmat'
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { makePhys } = require('../surface/dukephys')
+const { makePhys, doorOpen, liftTarget, transports, explosives, STEP } = require('../surface/dukephys')
 
 type Door = { si: number, kind: 'door' | 'lift', c0: number, c1: number, f0: number, f1: number, t: number, target: number, armed: boolean, onFor: number, bb: [number, number, number, number], barriersCleared?: boolean }
 
@@ -22,22 +22,16 @@ export function initDukePlay (dm: any, levels: any[]) {
       let a = Infinity; let b = Infinity; let c = -Infinity; let e = -Infinity
       for (let i = s.wallptr; i < s.wallptr + s.wallnum; i++) { const p = d.toWorld(W[i].x, W[i].y); a = Math.min(a, p.x); c = Math.max(c, p.x); b = Math.min(b, p.z); e = Math.max(e, p.z) }
       const bb: [number, number, number, number] = [a, b, c, e]
-      if ([20, 21, 22, 23, 25, 26, 27].includes(lt)) {
-        if (s.fz - s.cz > 1.6 * 8192) return // already open (e.g. swinging door panels)
-        // open to the lowest neighbouring ceiling that leaves at least 1.7 blocks of headroom
-        const cs = [...nb].map(n => S[n].cz).filter(z => s.fz - z >= 1.7 * 8192).sort((p, q) => q - p)
-        const c1 = cs[0] ?? Math.min(...[...nb].map(n => S[n].cz), s.fz - 2 * 8192)
-        list!.push({ si, kind: 'door', c0: s.cz, c1, f0: s.fz, f1: s.fz, t: 0, target: 0, armed: true, onFor: 0, bb })
-      } else if (lt >= 16 && lt <= 19) {
-        const up = lt === 17 || lt === 19
-        const fs = [...nb].map(n => S[n].fz).filter(z => Math.abs(z - s.fz) > 1024)
-        const above = fs.filter(z => z < s.fz).sort((p, q) => q - p)[0]; const below = fs.filter(z => z > s.fz).sort((p, q) => p - q)[0]
-        const f1 = (up ? above ?? below : below ?? above)
-        if (f1 == null) return
-        const moveC = lt === 18 || lt === 19
-        list!.push({ si, kind: 'lift', c0: s.cz, c1: moveC ? s.cz + (f1 - s.fz) : s.cz, f0: s.fz, f1, t: 0, target: 0, armed: true, onFor: 0, bb })
-      }
+      const o = doorOpen(d.m, si)
+      if (o) { list!.push({ si, kind: 'door', c0: s.cz, c1: o.c1, f0: s.fz, f1: o.f1, t: 0, target: 0, armed: true, onFor: 0, bb }); return }
+      const lf = liftTarget(d.m, si)
+      if (lf) list!.push({ si, kind: 'lift', c0: s.cz, c1: lf.moveC ? s.cz + (lf.f1 - s.fz) : s.cz, f0: s.fz, f1: lf.f1, t: 0, target: 0, armed: true, onFor: 0, bb })
     })
+    // C-9 explosive sectors (SE13): open when something blows up next to them
+    for (const b of explosives(d)) {
+      const s = S[b.si]
+      list.push({ si: b.si, kind: 'boom' as any, c0: s.cz, c1: b.c1, f0: s.fz, f1: b.f1, t: 0, target: 0, armed: true, onFor: 0, bb: [b.x - 0.5, b.z - 0.5, b.x + 0.5, b.z + 0.5], bx: b.x, bz: b.z, by: b.y } as any)
+    }
     doorsOf.set(d, list)
     return list
   }
@@ -58,12 +52,17 @@ export function initDukePlay (dm: any, levels: any[]) {
       const dx = Math.max(D.bb[0] - p.x, 0, p.x - D.bb[2]); const dz = Math.max(D.bb[1] - p.z, 0, p.z - D.bb[3])
       const near = Math.hypot(dx, dz) < 1.6
       if (D.kind === 'door') {
-        if (near && D.target === 0) { D.target = 1; clearBarriers(d, D) }
-      } else {
+        if (near && D.target === 0) { D.target = 1; S[D.si].__open = true; clearBarriers(d, D) }
+      } else if (D.kind === 'lift') {
         const on = sect === D.si && onGround
         D.onFor = on ? D.onFor + dt : 0
         if (!on) D.armed = true
         if (on && D.armed && D.onFor > 0.4 && D.t === D.target) { D.target = 1 - D.target; D.armed = false }
+        // call the lift: standing next to it while it is at the other level brings it to you
+        if (!on && near && D.t === D.target) {
+          const fNow = d.zToY(S[D.si].fz); const want = Math.abs(d.zToY(D.f0) - p.y) < Math.abs(d.zToY(D.f1) - p.y) ? 0 : 1
+          if (Math.abs(fNow - p.y) > 0.5 && want !== D.target) D.target = want
+        }
       }
       if (D.t !== D.target) {
         const span = Math.max(Math.abs(D.c1 - D.c0), Math.abs(D.f1 - D.f0)) / 8192 || 1
@@ -73,6 +72,12 @@ export function initDukePlay (dm: any, levels: any[]) {
         L?.updateDyn?.(D.si)
       }
     }
+  }
+  server?.on?.('blockmashExplosion', ({ center, radius }: any) => {
+    for (const [d, list] of doorsOf) for (const D of list as any[]) if (D.kind === 'boom' && D.target === 0 && Math.hypot(D.bx - center.x, D.bz - center.z, (D.by - center.y) * 0.5) < (radius ?? 3) + 2.5) { D.target = 1; d.m.sectors[D.si].__open = true; clearBarriers(d, D) }
+  })
+  ;(globalThis as any).blockmashDukeBoom = (all = false) => { // debug: blow every C-9 wall (or the nearest)
+    for (const [d, list] of doorsOf) for (const D of list as any[]) if (D.kind === 'boom' && (all || Math.hypot(D.bx - st.x, D.bz - st.z) < 6)) { D.target = 1; d.m.sectors[D.si].__open = true; clearBarriers(d, D) }
   }
   const sound = (name: string, at: any) => { try { server?.emit('blockmashDuke', { type: 'sound', sound: name, at }) } catch {} }
 
@@ -101,7 +106,7 @@ export function initDukePlay (dm: any, levels: any[]) {
     const d = dm.mapAt(src.x, src.z); if (!d) return off()
     const P = makePhys(d)
     if (!act) {
-      const g = P.ground(e.position.x, e.position.z, e.position.y, 0.3, 0.6)
+      const g = P.ground(e.position.x, e.position.z, e.position.y, 0.3, STEP)
       if (!g || e.position.y < g.floor - 0.6 || (e.position.y < g.floor + 0.3 && inHole(e.position.x, g.floor, e.position.z, 0.25))) return off()
       Object.assign(st, { x: e.position.x, y: Math.max(e.position.y, g.floor), z: e.position.z, vx: 0, vy: Math.max(0, e.velocity.y), vz: 0, on: false })
       act = true
@@ -116,17 +121,26 @@ export function initDukePlay (dm: any, levels: any[]) {
     const wl = Math.hypot(wx, wz); if (wl > 0) { wx = wx / wl * speed; wz = wz / wl * speed }
     const acc = st.on ? 0.55 : 0.12
     st.vx += (wx - st.vx) * acc; st.vz += (wz - st.vz) * acc
-    if (c.jump && st.on) { st.vy = 0.45; st.on = false }
+    if (c.jump && st.on) { st.vy = 0.5; st.on = false } // Duke jumps ~1.7 blocks
     st.vy = (st.vy - 0.08) * 0.98
-    const r = P.slide(st.x, st.z, st.y, st.vx, st.vz, 0.3, h, 0.6)
+    const r = P.slide(st.x, st.z, st.y, st.vx, st.vz, 0.3, h, STEP)
     st.x = r.x; st.z = r.z
-    const g = P.ground(st.x, st.z, st.y, 0.3, 0.6)
+    const g = P.ground(st.x, st.z, st.y, 0.3, STEP)
     st.y += st.vy
     if (g) {
       const hole = inHole(st.x, g.floor, st.z, 0.25)
       if (!hole && st.y <= g.floor) { st.y = g.floor; st.vy = 0; st.on = true } else st.on = false
       if (st.y + h > g.ceil && g.ceil - h >= g.floor - 0.01) { st.y = Math.min(st.y, g.ceil - h); if (st.vy > 0) st.vy = 0 }
       animate(d, dt, st, g.sect, st.on)
+      // SE7 drop shafts: falling into one lands you in the paired sector (Duke's room-over-room trick)
+      for (const t of transports(d)) {
+        if (t.from === g.sect && st.y < d.zToY(d.m.sectors[t.from].fz) + 1.2) {
+          st.x += t.dx; st.z += t.dz; st.y += t.dy
+          const g2 = P.ground(st.x, st.z, st.y, 0.3, STEP); if (g2 && st.y < g2.floor) st.y = g2.floor
+          last = null
+          break
+        }
+      }
       // nuke button -> next level
       if (now > exitCooldown) {
         for (const x of exitsOf(d)) {

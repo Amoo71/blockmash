@@ -262,14 +262,16 @@ export function initDukeButton () {
     btn.title = have ? 'Duke Nukem 3D shareware data is stored in this browser. Tap to replace; long-press/right-click to remove.' : 'Pick your Duke Nukem 3D shareware 3dduke13.zip (or DUKE3D.GRP). It is read locally and never uploaded.'
   }
   refresh()
+  let busy = false
   const onPick = async (inp: HTMLInputElement) => {
-    const f = inp.files?.[0]; if (!f) return
+    const f = inp.files?.[0]; if (!f || busy) return
+    busy = true
     bar.style.opacity = '1'
     try {
       const r = await importDuke(f, m => { msg.textContent = 'Duke3D: ' + m })
       msg.textContent = `Duke3D: ${r.tiles} tiles, ${r.sounds} sounds stored – restarting…`
       setTimeout(() => location.reload(), 900)
-    } catch (e: any) { msg.textContent = 'Duke3D: ' + (e?.message ?? e); console.warn('[blockmash] Duke import failed', e) }
+    } catch (e: any) { msg.textContent = 'Duke3D: ' + (e?.message ?? e); console.warn('[blockmash] Duke import failed', e); busy = false }
     inp.value = ''
   }
   input.onchange = () => onPick(input)
@@ -277,7 +279,7 @@ export function initDukeButton () {
   const prompt = () => {
     if (document.getElementById('bm-duke-prompt') || sessionStorage.getItem('bm-noduke')) return
     const ov = document.createElement('div'); ov.id = 'bm-duke-prompt'
-    ov.style.cssText = 'position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.78);font:14px sans-serif;color:#ddd;text-align:center;padding:16px'
+    ov.style.cssText = 'position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;background:#000;font:14px sans-serif;color:#ddd;text-align:center;padding:16px'
     ov.innerHTML = `<div style="max-width:420px;background:#14100c;border:2px solid #b8860b;border-radius:8px;padding:20px 18px">
       <div style="font:bold 22px sans-serif;color:#ffcc33;margin-bottom:10px">Load Duke Nukem 3D</div>
       <div style="line-height:1.45;margin-bottom:16px">BlockMash plays the real Duke Nukem 3D shareware levels (E1L1–E1L6) – Minecraft is only underneath, where you blow holes into them.<br><br>Pick <b>3dduke13.zip</b> (or <b>DUKE3D.GRP</b>) from your device. It is unpacked in your browser, stored locally and never uploaded.</div>
