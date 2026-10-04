@@ -87,10 +87,9 @@ function generation ({ version, seed = 1 } = {}) {
     for (let i = 0; i < 16; i++) {
       for (let k = 0; k < 16; k++) {
         const x = chunkX * 16 + i; const z = chunkZ * 16 + k
-        if (dm && dm.voidAt(x, z)) { // Duke mode: void around the levels (only bedrock far below)
+        if (dm && dm.voidAt(x, z)) { // Duke mode: pure void around the levels (falling in = Duke death)
           pos.x = i; pos.z = k
           for (let y = 0; y < 256; y++) { pos.y = y; chunk.setSkyLight(pos, 15) }
-          pos.y = 0; chunk.setBlockStateId(pos, B.bedrock)
           continue
         }
         let info = layout.columnInfo(x, z, seed)

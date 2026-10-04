@@ -43,11 +43,11 @@ function prepare (m, { ox, oz, G, zref = 8192 }) {
     }
     return inside
   }
-  const sectorAt = (bx, by) => {
+  const sectorAt = (bx, by, low = false) => {
     const c = grid.get(Math.floor(bx / CELL) + ',' + Math.floor(by / CELL))
     if (!c) return -1
     let best = -1
-    for (const si of c) if (inSector(si, bx, by)) { if (best < 0 || S[si].fz < S[best].fz) best = si } // overlapping (rare): take the higher floor
+    for (const si of c) if (inSector(si, bx, by)) { if (best < 0 || (low ? S[si].fz > S[best].fz : S[si].fz < S[best].fz)) best = si } // overlapping rooms: the higher floor (or the lowest, for the block fill under every room)
     return best
   }
   const slopeZ = (si, base, heinum, bx, by) => {
@@ -70,18 +70,19 @@ function prepare (m, { ox, oz, G, zref = 8192 }) {
   for (let i = 0; i < NX; i++) {
     for (let k = 0; k < NZ; k++) {
       const idx = i * NZ + k; const x = bbox.x0 + i; const z = bbox.z0 + k
-      const c = toBuild(x + 0.5, z + 0.5); const sc = sectorAt(c.bx, c.by)
+      const c = toBuild(x + 0.5, z + 0.5); const sc = sectorAt(c.bx, c.by, true)
       if (sc < 0) {
         // outside every sector: map exterior (no walls around) or solid wall/pillar mass
-        let near = false
-        for (const [dx, dz] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, 1], [-1, 1], [1, -1]]) { const p = toBuild(x + 0.5 + dx * 1.5, z + 0.5 + dz * 1.5); if (sectorAt(p.bx, p.by) >= 0) { near = true; break } }
-        kind[idx] = near ? 2 : 0; top[idx] = G; if (near) { bar0[idx] = G; bar1[idx] = G + 10 }
+        let near = false; let lo = G
+        for (const [dx, dz] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, 1], [-1, 1], [1, -1]]) { const p = toBuild(x + 0.5 + dx * 1.5, z + 0.5 + dz * 1.5); const s2 = sectorAt(p.bx, p.by, true); if (s2 >= 0) { near = true; lo = Math.min(lo, Math.floor(zToY(floorZ(s2, p.bx, p.by)))) } }
+        // wall mass: blocks never stick out above the lowest floor next to it (they would show as MC walls)
+        kind[idx] = near ? 2 : 0; top[idx] = near ? Math.min(G, lo) : G; if (near) { bar0[idx] = top[idx]; bar1[idx] = top[idx] + 10 }
         continue
       }
       sectOfCol[idx] = sc
       let fy = zToY(floorZ(sc, c.bx, c.by)); let wall = false
       for (const [dx, dz] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
-        const p = toBuild(x + dx, z + dz); let s2 = sectorAt(p.bx, p.by)
+        const p = toBuild(x + dx, z + dz); let s2 = sectorAt(p.bx, p.by, true)
         if (s2 < 0) { wall = true; s2 = sc }
         fy = Math.min(fy, zToY(floorZ(s2, p.bx, p.by)))
       }
