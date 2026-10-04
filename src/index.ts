@@ -406,6 +406,13 @@ async function connect (connectOptions: ConnectOptions) {
       // flying-squid: 'login' -> player.login -> now sends 'login' event to the client (handled in many plugins in mineflayer) -> then 'update_health' is sent which emits 'spawn' in mineflayer
 
       setLoadingScreenStatus('Starting local server')
+      // BlockMash: locally extracted Duke3D E1L1 map for the polygon surface (never shipped; blocky fallback without it)
+      if (!globalThis.blockmashDukeRaw) {
+        try {
+          const r = await fetch('./duke/maps/E1L1.json')
+          if (r.ok) globalThis.blockmashDukeRaw = await r.json()
+        } catch {}
+      }
       localServer = window.localServer = window.server = startLocalServer(serverOptions)
       // todo need just to call quit if started
       // loadingScreen.maybeRecoverable = false

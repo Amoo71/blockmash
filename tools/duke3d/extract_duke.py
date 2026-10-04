@@ -10,6 +10,8 @@ import json, os, subprocess, sys, urllib.request, shutil, tempfile
 from PIL import Image
 sys.path.insert(0, os.path.dirname(__file__))
 from dukegrp import open_grp, palette, tiles, tile_image, tile_offset, SHAREWARE_MD5
+from buildmap import read_map
+MAPS = ['E1L1']
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 ZIP = os.environ.get('DUKE3D_SHAREWARE_ZIP', os.path.join(ROOT, 'vendor', 'duke3d', '3dduke13.zip'))
@@ -94,6 +96,26 @@ def main():
                                 os.path.join(OUT, 'sounds', s.lower() + '.ogg')], check=True)
             else:
                 voc_to_wav(files[name], os.path.join(OUT, 'sounds', s.lower() + '.wav'))
+    # level geometry (sectors/walls/sprites) + every tile the maps reference, for the polygon surface renderer
+    os.makedirs(os.path.join(OUT, 'maps'), exist_ok=True)
+    for mname in MAPS:
+        if mname + '.MAP' not in files: continue
+        m = read_map(files[mname + '.MAP'])
+        need = set()
+        for sc in m['sectors']: need.update((sc['fpic'], sc['cpic']))
+        for w in m['walls']: need.update((w['pic'], w['opic']))
+        for sp in m['sprites']:
+            if not sp['cstat'] & 32768: need.add(sp['pic'])
+        for i in sorted(need):
+            if i in T and str(i) not in meta and i not in meta:
+                img = tile_image(T[i], pal)
+                img.save(os.path.join(OUT, 'tiles', f'{i}.png'), optimize=True)
+                meta[i] = {'w': img.width, 'h': img.height, 'off': tile_offset(T[i][2])}
+        for i in need:
+            if i in meta and 'avg' not in meta[i]:
+                im = Image.open(os.path.join(OUT, 'tiles', f'{i}.png')).convert('RGBA').resize((1, 1), Image.BOX)
+                meta[i]['avg'] = list(im.getpixel((0, 0))[:3])
+        json.dump(m, open(os.path.join(OUT, 'maps', mname + '.json'), 'w'), separators=(',', ':'))
     if os.path.isdir(ITEMS):
         for item, tile in ITEM_ICONS.items():
             if tile in T:

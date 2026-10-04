@@ -69,10 +69,40 @@ function columnInfo (x, z, seed) {
     const dz = Math.max(core.c0 - lz, 0, lz - (core.c1 - 1))
     w = smoothstep(1 - Math.hypot(dx, dz) / core.blend)
   }
-  const h = Math.round(lerp(nat, G, w))
+  // smooth surface height (float) of the polygon terrain; the block layer stays just below it:
+  // top block y = h, its top face h + 1 <= hs - 0.01 (zones: hs = G + 1.03, so h = G as before)
+  const hs = lerp(nat + 1, G + 1.03, w)
+  const h = Math.floor(hs - 0.01) - 1
   const inCore = !!core && lx >= core.c0 && lx < core.c1 && lz >= core.c0 && lz < core.c1
   const biome = w > 0.5 ? (biomeAt(x, z, seed, h) === 'snowy' ? 'snowy' : 'plains') : biomeAt(x, z, seed, h)
-  return { rx, rz, lx, lz, type, w, h, G, inCore, u: core ? lx - core.c0 : 0, v: core ? lz - core.c0 : 0, biome }
+  return { rx, rz, lx, lz, type, w, h, hs, G, inCore, u: core ? lx - core.c0 : 0, v: core ? lz - core.c0 : 0, biome }
+}
+
+/** smooth surface height at any (float) point – used by the client terrain mesh + collision */
+function surfaceHeight (x, z, seed) {
+  const rx = Math.floor(x / REGION); const rz = Math.floor(z / REGION)
+  const lx = x - rx * REGION; const lz = z - rz * REGION
+  const type = zoneType(rx, rz, seed)
+  const nat = naturalHeight(x, z, seed)
+  const core = coreOf(type)
+  if (!core) return nat + 1
+  const G = zoneGround(rx, rz, type, seed)
+  const dx = Math.max(core.c0 - lx, 0, lx - (core.c1 - 1))
+  const dz = Math.max(core.c0 - lz, 0, lz - (core.c1 - 1))
+  const w = smoothstep(1 - Math.hypot(dx, dz) / core.blend)
+  return lerp(nat + 1, G + 1.03, w)
+}
+
+/** deterministic tree per 6x6 cell (shared by the block generator = hidden trunk and the client = low-poly tree) */
+function treeInCell (cx, cz, seed) {
+  const hh = hash2(cx, cz, seed ^ 0x7ee)
+  const tx = cx * 6 + 1 + (hh & 3); const tz = cz * 6 + 1 + ((hh >>> 2) & 3)
+  const ti = columnInfo(tx, tz, seed)
+  if (ti.w > 0.02 || ti.h <= WATER) return null
+  const dens = { forest: 0.75, plains: 0.07, snowy: 0.35 }[ti.biome] || 0
+  if (((hh >>> 4) & 1023) / 1024 >= dens) return null
+  const kind = ti.biome === 'snowy' ? 'spruce' : ti.biome === 'forest' && ((hh >>> 14) & 3) === 0 ? 'birch' : 'oak'
+  return { x: tx, z: tz, kind, h: ti.h, size: 0.8 + ((hh >>> 16) % 5) / 10 }
 }
 
 function regionCenter (rx, rz) { return { x: rx * REGION + 96, z: rz * REGION + 96 } }
@@ -89,4 +119,4 @@ function findZone (type, seed, fromX = 0, fromZ = 0) {
   return null
 }
 
-module.exports = { REGION, WATER, ZONE_G, ZONES, zoneType, naturalHeight, biomeAt, columnInfo, zoneGround, regionCenter, findZone, coreOf }
+module.exports = { treeInCell, surfaceHeight, REGION, WATER, ZONE_G, ZONES, zoneType, naturalHeight, biomeAt, columnInfo, zoneGround, regionCenter, findZone, coreOf }

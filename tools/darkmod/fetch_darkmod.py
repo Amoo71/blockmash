@@ -31,6 +31,22 @@ VOICES = {'idle': 'idle_01', 'idle2': 'idle_whistle_01', 'huh': 'to_alert1_01', 
           'melee': 'combat_melee_01', 'pain': 'pain_small_01', 'die': 'die_quiet_01', 'ko': 'die_quiet_02', 'blinded': 'blinded_01',
           'lost': 'lost_player_01', 'killed': 'killed_player_01', 'lights': 'notice_lights_01', 'alarm': 'raise_alarm_01'}
 
+# architecture textures for the polygon quarter (houses, lanes, city wall), stored as 512 px jpg
+ARCH = {
+    'halftimber': 'tdm_textures_plaster01.pk4||dds/textures/darkmod/plaster/halftimber_pattern1.dds',
+    'halftimber_win': 'tdm_textures_plaster01.pk4||dds/textures/darkmod/plaster/halftimber_2windows.dds',
+    'gable': 'tdm_textures_plaster01.pk4||dds/textures/darkmod/plaster/halftimber_gables.dds',
+    'workshop': 'tdm_textures_plaster01.pk4||dds/textures/darkmod/plaster/framed_with_bricks01.dds',
+    'roof_red': 'tdm_textures_roof01.pk4||dds/textures/darkmod/roof/rooftiles_ceramic_red.dds',
+    'roof_brown': 'tdm_textures_roof01.pk4||dds/textures/darkmod/roof/rooftiles_ceramic_brown.dds',
+    'roof_old': 'tdm_textures_roof01.pk4||dds/textures/darkmod/roof/rooftiles_ceramic_old.dds',
+    'shingle': 'tdm_textures_roof01.pk4||dds/textures/darkmod/roof/shingle_dullbrown01.dds',
+    'cobble': 'tdm_textures_stone_cobblestones01.pk4||dds/textures/darkmod/stone/cobblestones/blocks_mixedsize01.dds',
+    'stone': 'tdm_textures_stone_brick01.pk4||dds/textures/darkmod/stone/brick/blocks_large_mildew.dds',
+    'stone2': 'tdm_textures_stone_brick01.pk4||dds/textures/darkmod/stone/brick/blocks_brown.dds',
+    'planks': 'tdm_textures_wood01.pk4||dds/textures/darkmod/wood/boards/planks_wood_large_worn_rough_dark.dds',
+}
+
 def get(url, rng=None, timeout=60):
     req = urllib.request.Request(url, headers={'User-Agent': 'BlockMash-asset-fetch/1.0', **({'Range': f'bytes={rng[0]}-{rng[1] - 1}'} if rng else {})})
     with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -111,6 +127,14 @@ def main():
             got['sounds'].append(name)
         except Exception as e:
             print('darkmod: sound', key, e)
+    os.makedirs(os.path.join(OUT, 'tex'), exist_ok=True)
+    got['tex'] = []
+    for name, key in ARCH.items():
+        try:
+            dds_png(member(entries, key)).convert('RGB').resize((512, 512), Image.LANCZOS).save(os.path.join(OUT, 'tex', name + '.jpg'), quality=85)
+            got['tex'].append(name)
+        except Exception as e:
+            print('darkmod: texture', key, e)
     try:
         lic = member(entries, 'tdm_shared_stuff.zip||LICENSE.txt')
         open(os.path.join(OUT, 'LICENSE-TheDarkMod.txt'), 'wb').write(lic)

@@ -5,6 +5,7 @@
 const { Vec3 } = require('vec3')
 const layout = require('./layout')
 const makeResolver = require('./blocks')
+const { getDuke } = require('./surface/dukeworld')
 
 const TP = {
   village: (c) => ({ x: c.x - 96 + 64 + 38, z: c.z - 96 + 64 + 32 }),
@@ -202,7 +203,7 @@ module.exports = function installBlockMash (serv) {
           const b = mcData.blocks[await world.getBlockType(p)]
           if (!b || UNBREAKABLE.has(b.name)) continue
           if (b.name === 'tnt') { tnts.push(p); continue }
-          if ((b.resistance ?? 0) > 1000) continue
+          if (b.name !== 'barrier' && (b.resistance ?? 0) > 1000) continue
           serv.setBlock(world, p, 0)
         }
       }
@@ -262,6 +263,11 @@ module.exports = function installBlockMash (serv) {
       if (sub === 'tp') {
         const z = layout.findZone(arg || 'duke', seed(), pl.position.x, pl.position.z)
         if (!z || !TP[arg || 'duke']) return 'No such zone nearby'
+        const dm = getDuke(seed())
+        if ((arg || 'duke') === 'duke' && dm) {
+          bm.teleport(pl, new Vec3(dm.start.x, dm.start.y + 0.2, dm.start.z))
+          return 'Teleported to Duke Nukem 3D E1L1 (Hollywood Holocaust)'
+        }
         const p = TP[arg || 'duke'](z)
         const y = await surfaceY(p.x, p.z)
         bm.teleport(pl, new Vec3(p.x + 0.5, y, p.z + 0.5))
@@ -271,6 +277,18 @@ module.exports = function installBlockMash (serv) {
       return 'Unknown subcommand'
     }
   })
+
+  // polygon surface: holes (explosions/mining) clip the surface meshes on the client; mesh-to-voxel rims come back here
+  bm.surfaceHoles = []
+  bm.addHole = (x, y, z, r) => { bm.surfaceHoles.push({ x, y, z, r }); if (bm.surfaceHoles.length > 256) bm.surfaceHoles.shift(); serv.emit('blockmashHole', { x, y, z, r }) }
+  serv.on('blockmashExplosion', ({ center, radius }) => bm.addHole(center.x, center.y, center.z, radius + 0.6))
+  bm.surfaceVoxels = async (cells) => {
+    const world = serv.overworld
+    for (const [x, y, z, name] of cells) {
+      const p = new Vec3(x, y, z)
+      if ((await world.getBlockStateId(p)) === 0) serv.setBlock(world, p, S(name))
+    }
+  }
 
   require('./duke')(serv, bm)
   require('./darkmod')(serv, bm)

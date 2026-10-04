@@ -2,6 +2,7 @@
 import { initDuke } from './duke'
 import { initDarkMod } from './darkmod'
 import { initYorg } from './yorg'
+import { initSurface } from './surface'
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const ownNames: Record<string, string> = require('../../lang/blockmash-en.json')
 
@@ -27,5 +28,6 @@ const tryStart = () => {
   void initDuke()
   void initDarkMod()
   void initYorg()
+  void initSurface().catch(e => console.warn('[blockmash] surface failed', e))
 }
 setInterval(tryStart, 1000)

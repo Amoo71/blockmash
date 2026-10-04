@@ -36,5 +36,6 @@ vendor/duke3d/
 assets/duke/
 assets/darkmod/
 assets/yorg/
+assets/surface/
 release/stage/
 release/*.zip

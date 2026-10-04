@@ -37,7 +37,7 @@ cp -r tools/release/template/. "$STAGE/"
 cp -r dist "$STAGE/www"
 ( cd "$STAGE/www" && find . -name '*.map' -delete && rm -rf meta.json duke && cd mc-data && ls | grep -v '^1\.14\.js$' | xargs -r rm -f )
 mkdir -p "$STAGE/tools" "$STAGE/licenses"
-cp tools/duke3d/dukegrp.py tools/duke3d/extract_duke.py "$STAGE/tools/"
+cp tools/duke3d/dukegrp.py tools/duke3d/extract_duke.py tools/duke3d/buildmap.py "$STAGE/tools/"
 cp LICENSE "$STAGE/licenses/LICENSE-BlockMash-MIT.txt"; cp ASSETS_AUDIT.md "$STAGE/licenses/"
 [ -f dist/darkmod/LICENSE-TheDarkMod.txt ] && cp dist/darkmod/LICENSE-TheDarkMod.txt "$STAGE/licenses/"
 [ -f dist/yorg/LICENSES-Yorg.txt ] && cp dist/yorg/LICENSES-Yorg.txt "$STAGE/licenses/"
