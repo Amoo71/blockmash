@@ -75,6 +75,7 @@ import { connectToPeer } from './localServerMultiplayer'
 import CustomChannelClient from './customClient'
 import { loadScript } from 'prismarine-viewer/viewer/lib/utils'
 import { registerServiceWorker } from './serviceWorker'
+import { dukeUrl, getDukeManifest, initDukeButton } from './mashup/client/dukedata'
 import { appStatusState, lastConnectOptions } from './react/AppStatusProvider'
 
 import { fsState } from './loadSave'
@@ -102,6 +103,7 @@ window.beforeRenderFrame = []
 // ACTUAL CODE
 
 void registerServiceWorker()
+initDukeButton()
 watchFov()
 initCollisionShapes()
 
@@ -407,10 +409,10 @@ async function connect (connectOptions: ConnectOptions) {
 
       setLoadingScreenStatus('Starting local server')
       // BlockMash: locally extracted Duke3D E1L1 map for the polygon surface (never shipped; blocky fallback without it)
-      if (!globalThis.blockmashDukeMaps) {
+      if (!globalThis.blockmashDukeMaps && await getDukeManifest()) {
         const maps = {}
         await Promise.all(['E1L1', 'E1L2', 'E1L3', 'E1L4', 'E1L5', 'E1L6'].map(async n => {
-          try { const r = await fetch(`./duke/maps/${n}.json`); if (r.ok) maps[n] = await r.json() } catch {}
+          try { const r = await fetch(dukeUrl(`./duke/maps/${n}.json`)); if (r.ok) maps[n] = await r.json() } catch {}
         }))
         if (Object.keys(maps).length) globalThis.blockmashDukeMaps = maps
       }

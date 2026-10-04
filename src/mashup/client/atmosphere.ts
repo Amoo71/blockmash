@@ -5,6 +5,7 @@
 import * as THREE from 'three'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
+import { dukeUrl, getDukeManifest } from './dukedata'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
 import { Vec3 } from 'vec3'
@@ -157,7 +158,7 @@ export function initAtmosphere () {
   const loadSky = (pic: number, w: number, h: number) => {
     let t = skyTex.get(pic)
     if (!t) {
-      t = new THREE.TextureLoader().load(`./duke/tiles/sky_${pic}.png`)
+      t = new THREE.TextureLoader().load(dukeUrl(`./duke/tiles/sky_${pic}.png`))
       t.wrapS = THREE.RepeatWrapping; t.magFilter = THREE.NearestFilter; t.minFilter = THREE.LinearFilter; t.generateMipmaps = false
       skyTex.set(pic, t)
     }
@@ -168,7 +169,7 @@ export function initAtmosphere () {
     }
   }
   let man: any = null
-  void fetch('./duke/manifest.json').then(r => r.json()).then(m => { man = m }).catch(() => {})
+  void getDukeManifest().then(m => { man = m })
 
   // ---------------- quality
   const toast = document.createElement('div')

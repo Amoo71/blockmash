@@ -7,6 +7,7 @@ import * as THREE from 'three'
 import { Vec3 } from 'vec3'
 import { addHoleUniform, dayUniform, farUniform, inHole } from './surfmat'
 import { buildDukeMap, VoxSource, DukeLight } from './dukemap'
+import { getDukeManifest } from './dukedata'
 import { triBoxOverlap } from '../surface/voxelize'
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { getDuke } = require('../surface/dukeworld')
@@ -31,7 +32,7 @@ export async function initSurface () {
   const root = new THREE.Group(); root.name = 'blockmash-surface'; scene.add(root)
   const blockName = (x: number, y: number, z: number): string | null | undefined => bot.world.getBlock(new Vec3(x, y, z))?.name
   let man: any = null
-  try { man = await (await fetch('./duke/manifest.json')).json() } catch {}
+  man = await getDukeManifest()
   if (!man) return
 
   // ---------------- Duke levels, built lazily when near, dropped when far (GPU memory on mobile)

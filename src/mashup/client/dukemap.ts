@@ -2,6 +2,7 @@
 // BlockMash surface. Tiles are packed into one atlas -> 2 draw calls (opaque + masked). Shareware data is never shipped.
 import * as THREE from 'three'
 import { GeoBuilder, surfaceMaterial } from './surfmat'
+import { dukeUrl } from './dukedata'
 
 const SKIP_SPRITE = (p: number) => p <= 10 || (p >= 21 && p <= 60) || p === 100 || (p >= 1680 && p < 1760) || (p >= 1820 && p <= 1830) || (p >= 2000 && p <= 2050) || (p >= 2630 && p <= 2700) || p === 1405 || p === 2271
 export type VoxSource = { pos: number[], idx: number[], tc: number[] }
@@ -34,7 +35,7 @@ export async function buildDukeMap (dm: any, base: string, tiles: Record<string,
   const canvas = document.createElement('canvas'); canvas.width = AW; canvas.height = AH
   const ctx = canvas.getContext('2d')!
   await Promise.all(list.map(async p => {
-    const img = new Image(); img.src = `${base}/tiles/${p}.png`
+    const img = new Image(); img.src = dukeUrl(`${base}/tiles/${p}.png`)
     try { await img.decode(); const [x, y] = place.get(p)!; ctx.drawImage(img, x, y) } catch {}
   }))
   const atlas = new THREE.CanvasTexture(canvas)

@@ -3,6 +3,7 @@
 // game falls back to normal Minecraft-style models and silent weapons.
 import * as THREE from 'three'
 import { makeSprite, setTile, rotation, Manifest } from './sprites'
+import { dukeUrl, getDukeManifest } from './dukedata'
 
 const BASE = './duke'
 type Anim = { idle: number, walk?: [number, number, number], attack?: number, death: number[], rots?: number, px?: number }
@@ -25,9 +26,8 @@ const EXPLOSION = Array.from({ length: 21 }, (_, i) => 1890 + i)
 export async function initDuke () {
   let manifest: Manifest
   try {
-    const r = await fetch(`${BASE}/manifest.json`)
-    if (!r.ok) throw new Error(String(r.status))
-    manifest = await r.json()
+    manifest = await getDukeManifest()
+    if (!manifest) throw new Error('no data')
   } catch {
     console.log('[blockmash] Duke3D shareware data not installed – using fallbacks')
     return
@@ -38,7 +38,7 @@ export async function initDuke () {
     let vol = 1
     if (at && bot?.entity) vol = Math.max(0, 1 - bot.entity.position.distanceTo(at as any) / 48)
     if (vol <= 0.02) return
-    const a = new Audio(`${BASE}/sounds/${name}.${manifest.soundExt ?? "ogg"}`)
+    const a = new Audio(dukeUrl(`${BASE}/sounds/${name}.${manifest.soundExt ?? "ogg"}`))
     a.volume = vol * 0.8
     void a.play().catch(() => {})
   }
@@ -64,8 +64,7 @@ export async function initDuke () {
   const setImg = (tile: number) => {
     const m = manifest.tiles[tile]; if (!m) return
     const scale = Math.max(2, Math.round(innerHeight / 200 * 0.9))
-    const src = `${BASE}/tiles/${tile}.png`
-    if (!weapon.src.endsWith(src.slice(1))) weapon.src = src
+    if ((weapon as any).__tile !== tile) { (weapon as any).__tile = tile; weapon.src = dukeUrl(`${BASE}/tiles/${tile}.png`) }
     weapon.style.width = `${m.w * scale}px`
     weapon.style.height = `${m.h * scale}px`
   }

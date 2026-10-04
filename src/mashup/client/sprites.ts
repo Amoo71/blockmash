@@ -1,12 +1,13 @@
 // Billboard sprite helpers (BUILD-engine style 5-rotation actors) for mashup content
 import * as THREE from 'three'
+import { dukeUrl } from './dukedata'
 
 const loader = new THREE.TextureLoader()
 const cache = new Map<string, THREE.Texture>()
 export const tex = (url: string) => {
   let t = cache.get(url)
   if (!t) {
-    t = loader.load(url)
+    t = loader.load(dukeUrl(url))
     t.magFilter = THREE.NearestFilter
     t.minFilter = THREE.NearestFilter
     t.colorSpace = THREE.SRGBColorSpace

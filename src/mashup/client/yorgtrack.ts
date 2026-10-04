@@ -51,7 +51,7 @@ export async function initYorgTrack () {
       im.instanceMatrix.needsUpdate = true
       im.frustumCulled = false; im.castShadow = md.name === 'track' || md.inst.length < 20; im.name = 'yorg-' + md.name
       root.add(im)
-      meshes.push({ mesh: im, mats: md.inst })
+      meshes.push({ mesh: im, mats: md.inst, tris: md.groups.reduce((a: number, g: any) => a + g.count, 0) / 3 } as any)
     }
     built = true; building = false
     console.log('[blockmash] Yorg track', name, meta.tris, 'tris')
@@ -62,10 +62,12 @@ export async function initYorgTrack () {
     const q = (globalThis as any).blockmashQuality?.() ?? (mobile ? 'low' : 'medium')
     const R = q === 'low' ? 90 : q === 'medium' ? 170 : 400
     const m4 = new THREE.Matrix4()
-    for (const { mesh, mats } of meshes) {
+    for (const { mesh, mats, tris } of meshes as any) {
       if (mats.length === 1) continue
+      // Low (mobile default): per-prop draw distance by its triangle cost, decimating ~474k -> well under 100k tris
+      const Rm = q !== 'low' ? R : tris > 1000 ? 110 : tris > 300 ? 55 : 38
       const lx = p.x - yt.OX; const lz = p.z - yt.OZ
-      const near = mats.map((e, i) => [i, (e[12] - lx) ** 2 + (e[14] - lz) ** 2] as [number, number]).filter(a => a[1] < R * R).sort((a, b) => a[1] - b[1])
+      const near = mats.map((e, i) => [i, (e[12] - lx) ** 2 + (e[14] - lz) ** 2] as [number, number]).filter(a => a[1] < Rm * Rm).sort((a, b) => a[1] - b[1])
       near.forEach(([i], k) => { m4.fromArray(mats[i]); mesh.setMatrixAt(k, m4) })
       mesh.count = near.length; mesh.instanceMatrix.needsUpdate = true
     }
