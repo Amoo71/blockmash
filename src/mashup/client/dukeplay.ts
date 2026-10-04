@@ -88,7 +88,7 @@ export function initDukePlay (dm: any, levels: any[]) {
     l = d.m.sprites.filter((sp: any) => sp.pic === 142 && Math.abs(sp.x) < 1e6).map((sp: any) => { const w = d.toWorld(sp.x, sp.y); return { x: w.x, z: w.z, y: d.zToY(sp.z) } })
     exits.set(d, l!); return l!
   }
-  let exitCooldown = 0
+  let exitCooldown = 0; let teleUntil = 0
 
   // ---------------- player controller
   let act = false; let last: any = null
@@ -133,12 +133,16 @@ export function initDukePlay (dm: any, levels: any[]) {
       if (st.y + h > g.ceil && g.ceil - h >= g.floor - 0.01) { st.y = Math.min(st.y, g.ceil - h); if (st.vy > 0) st.vy = 0 }
       animate(d, dt, st, g.sect, st.on)
       // SE7 drop shafts: falling into one lands you in the paired sector (Duke's room-over-room trick)
-      for (const t of transports(d)) {
+      for (const t of now > teleUntil ? transports(d) : []) {
         if (t.from === g.sect && st.y < d.zToY(d.m.sectors[t.from].fz) + 1.2) {
-          st.x += t.dx; st.z += t.dz; st.y += t.dy
-          const g2 = P.ground(st.x, st.z, st.y, 0.3, STEP); if (g2 && st.y < g2.floor) st.y = g2.floor
-          last = null
-          break
+          const nx = st.x + t.dx; const nz = st.z + t.dz; let ny = st.y + t.dy
+          const g2 = P.ground(nx, nz, ny, 0.3, STEP); if (g2 && ny < g2.floor) ny = g2.floor
+          // a real server teleport: the target is often outside the loaded chunks (mineflayer would freeze there)
+          const pl = server?.players?.find((q: any) => q.username === bot.username) ?? server?.players?.[0]
+          if (pl && server.blockmash?.teleport) server.blockmash.teleport(pl, new (e.position.constructor)(nx, ny + 0.05, nz))
+          else bot.chat(`/tp ${nx.toFixed(2)} ${(ny + 0.05).toFixed(2)} ${nz.toFixed(2)}`)
+          teleUntil = now + 1500; act = false; last = null; (globalThis as any).blockmashDukeAct = false
+          return
         }
       }
       // nuke button -> next level
