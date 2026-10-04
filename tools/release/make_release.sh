@@ -59,6 +59,7 @@ shrink(os.path.join(w, 'extra-textures', 'loading.png'), 1050)
 shrink(os.path.join(w, 'favicon.png'), 128)
 PY
 if grep -rqi "3D Realms. Do not redistribute" "$STAGE/www"; then echo "Duke data leaked into stage" >&2; exit 1; fi
+[ -n "${STAGE_ONLY:-}" ] && { echo "staged: $STAGE"; exit 0; }
 OUT=release/BlockMash-local-$VER.zip; rm -f "$OUT"
 python3 - "$OUT" <<'PY'
 import os, sys, zipfile, stat
