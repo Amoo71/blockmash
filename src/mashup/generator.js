@@ -41,47 +41,55 @@ function generation ({ version, seed = 1 } = {}) {
   }
 
   function trees (x, z, info, put) {
-    // surface mode: only a 3-block log trunk (hidden inside the client's low-poly tree) so wood stays obtainable
-    if (((x % 6) + 6) % 6 === 0 || true) {
-      const t = layout.treeInCell(Math.floor((x - 1) / 6), Math.floor((z - 1) / 6), seed)
-      if (!t || t.x !== x || t.z !== z) return
-      for (let y = info.h + 1; y < info.h + 4; y++) put(y, t.kind + '_log', true)
+    // trees are placed per 6x6 cell; canopies can reach into neighbouring columns/chunks
+    const cx0 = Math.floor((x - 3) / 6); const cx1 = Math.floor((x + 3) / 6)
+    const cz0 = Math.floor((z - 3) / 6); const cz1 = Math.floor((z + 3) / 6)
+    for (let cx = cx0; cx <= cx1; cx++) {
+      for (let cz = cz0; cz <= cz1; cz++) {
+        const hh = hash2(cx, cz, seed ^ 0x7ee)
+        const tx = cx * 6 + 1 + (hh & 3); const tz = cz * 6 + 1 + ((hh >>> 2) & 3)
+        const dx = x - tx; const dz = z - tz
+        if (Math.abs(dx) > 2 || Math.abs(dz) > 2) continue
+        const ti = dx === 0 && dz === 0 ? info : layout.columnInfo(tx, tz, seed)
+        if (ti.w > 0.02 || ti.h <= layout.WATER) continue
+        const dens = { forest: 0.75, plains: 0.07, snowy: 0.35 }[ti.biome] || 0
+        if (((hh >>> 4) & 1023) / 1024 >= dens) continue
+        const kind = ti.biome === 'snowy' ? 'spruce' : ti.biome === 'forest' && ((hh >>> 14) & 3) === 0 ? 'birch' : 'oak'
+        const th = 4 + ((hh >>> 16) % 3) + (kind === 'spruce' ? 2 : 0)
+        const base = ti.h + 1; const top = base + th
+        const log = kind + '_log'; const leaves = kind + '_leaves[persistent=true]'
+        if (dx === 0 && dz === 0) for (let y = base; y < top; y++) put(y, log, true)
+        const ad = Math.max(Math.abs(dx), Math.abs(dz)); const cornerSkip = Math.abs(dx) === 2 && Math.abs(dz) === 2
+        if (kind === 'spruce') {
+          for (let y = base + 2; y <= top; y++) {
+            const r = Math.max(0, Math.min(2, Math.floor((top - y + 1) / 2))) - ((top - y) % 2)
+            if (ad <= Math.max(r, y === top ? 0 : 1) && !(cornerSkip)) put(y, leaves, false)
+          }
+        } else {
+          for (let y = top - 3; y <= top; y++) {
+            const r = y >= top - 1 ? 1 : 2
+            if (ad > r) continue
+            if (r === 1 && Math.abs(dx) === 1 && Math.abs(dz) === 1 && y === top) continue
+            if (cornerSkip && rnd3(x, y, z, seed) < 0.6) continue
+            put(y, leaves, false)
+          }
+        }
+      }
     }
   }
-
-  // surface mode: the visible surface is polygon geometry rendered by the client (src/mashup/client/surface*.ts);
-  // structures of the Dark Mod quarter / Yorg track become invisible collision (barrier) + kept interactive blocks
-  const KEEP_DM = /^(lantern|campfire|chest|bookshelf|lectern|furnace|blast_furnace|smoker|anvil|grindstone|hopper|cauldron|crafting_table|water|iron_block|gold_block|iron_bars|dark_oak_door.*)$/
-  const surfacePut = (type, G, put) => (y, spec, force = true) => {
-    const name = spec.split('[')[0]
-    if (y <= G) {
-      if (name === 'coarse_dirt') return put(y, 'grass_block', force)
-      return put(y, spec, force)
-    }
-    if (type === 'darkmod') {
-      if (KEEP_DM.test(spec) || name === 'water') return put(y, spec, force)
-      if (/stairs|slab|planks|ladder|_wall$/.test(name)) return
-      return put(y, 'barrier', force)
-    }
-    if (type === 'yorg') { if (name === 'barrel' || name === 'air') return; return put(y, 'barrier', force) }
-    return put(y, spec, force)
-  }
-  const HS = new Float32Array(17 * 17)
 
   return function generateChunk (chunkX, chunkZ) {
     const chunk = new Chunk()
     const pos = new Vec3(0, 0, 0)
-    for (let a = 0; a <= 16; a++) for (let b = 0; b <= 16; b++) HS[a * 17 + b] = layout.surfaceHeight(chunkX * 16 + a, chunkZ * 16 + b, seed)
-    const dm = getDuke(seed)
+    const dm = getDuke(seed) // real Duke3D shareware levels on the surface (local extraction only)
     for (let i = 0; i < 16; i++) {
       for (let k = 0; k < 16; k++) {
         const x = chunkX * 16 + i; const z = chunkZ * 16 + k
-        const info = layout.columnInfo(x, z, seed)
-        // block top must stay below all 4 corners of the smooth surface cell above it
-        info.h = Math.floor(Math.min(HS[i * 17 + k], HS[(i + 1) * 17 + k], HS[i * 17 + k + 1], HS[(i + 1) * 17 + k + 1]) - 0.15) - 1
+        let info = layout.columnInfo(x, z, seed)
         const dcol = dm && dm.col(x, z)
-        const inDuke = dcol && dcol.kind !== 0
-        if (inDuke) { info.h = dcol.top - 2; info.biome = 'plains'; info.w = 1; info.G = dcol.top - 2 } // block top 1 below the polygon floor (no z-fighting)
+        const inDuke = !!dcol && dcol.kind !== 0
+        // block top 1 below the polygon floor (no z-fighting); vanilla underground below
+        if (inDuke) info = { ...info, h: dcol.top - 2, biome: 'plains', w: 1, G: dcol.top - 2, inCore: false }
         const { h, biome } = info
         col.fill(AIR)
         const put = (y, spec, force = true) => {
@@ -118,16 +126,13 @@ function generation ({ version, seed = 1 } = {}) {
           if (t === 'snowy') col[layout.WATER] = B.ice
         }
         // --- surface: zones or vanilla decoration
-        const Z = !inDuke && info.inCore && !(info.type === 'duke' && dm) && ZONES[info.type]
+        const Z = info.inCore && !(info.type === 'duke' && dm) && ZONES[info.type]
         if (inDuke) {
-          col[h] = S('smooth_stone') // not "natural" -> no terrain mesh; the Duke floor polygons sit on top
+          col[h] = S('smooth_stone')
           if (dcol.bar1 > dcol.bar0) for (let y = dcol.bar0; y < dcol.bar1; y++) put(y, 'barrier')
         } else if (Z) {
-          Z.column(info.u, info.v, info.G, info.type === 'village' ? put : surfacePut(info.type, info.G, put), { seed, rx: info.rx, rz: info.rz })
+          Z.column(info.u, info.v, info.G, put, { seed, rx: info.rx, rz: info.rz })
         } else if (h >= layout.WATER) {
-          // natural surface: no block plants/snow; trees = hidden log trunk inside the client's low-poly tree mesh
-          if (info.w < 0.5) trees(x, z, info, put)
-        } else if (false) {
           const r = rnd2(x, z, seed ^ 0xdec)
           if (biome === 'plains' || biome === 'forest') {
             if (r < 0.1) put(h + 1, 'grass')

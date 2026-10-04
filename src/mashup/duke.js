@@ -276,31 +276,35 @@ module.exports = function installDuke (serv, bm) {
   // real E1L1 map on the surface: enemies and pickups at the level's own sprite positions (once)
   const MAP_ITEMS = { 21: 'iron_horse_armor', 22: 'diamond_horse_armor', 23: 'leather_horse_armor', 28: 'golden_horse_armor', 51: MEDKIT, 52: MEDKIT, 53: MEDKIT, 100: ATOMIC, 40: AMMO_ITEM, 41: AMMO_ITEM, 44: AMMO_ITEM, 47: AMMO_ITEM, 49: AMMO_ITEM, 47.5: 'firework_star' }
   const mapEnemy = (p) => (p >= 1680 && p < 1760) ? 'trooper' : (p >= 2000 && p <= 2045) ? 'pigcop' : (p >= 1820 && p <= 1830) ? 'octabrain' : (p >= 2630 && p <= 2700) ? 'battlelord' : null
-  let mapDone = false
+  const mapDone = new Set()
   const mapIv = setInterval(() => {
-    const dm = getDuke(serv.overworld?.seed | 0)
-    if (!dm || mapDone) return
-    const cx = (dm.bbox.x0 + dm.bbox.x1) / 2; const cz = (dm.bbox.z0 + dm.bbox.z1) / 2
-    if (![...serv.players].some(pl => Math.hypot(pl.position.x - cx, pl.position.z - cz) < 160)) return
-    mapDone = true
-    let n = 0
-    for (const sp of dm.m.sprites) {
-      const kind = mapEnemy(sp.pic); const item = MAP_ITEMS[sp.pic]
-      if (!kind && !item) continue
-      const w = dm.toWorld(sp.x, sp.y)
-      const fy = dm.floorAt(w.x, w.z)
-      const y = (fy ? fy.y : dm.zToY(sp.z)) + 0.15
-      if (kind && n++ < 40) duke.spawnEnemy(kind, new Vec3(w.x, y, w.z))
-      if (item) serv.spawnObject(mcData.entitiesByName.item.id, serv.overworld, new Vec3(w.x, y + 0.3, w.z), { velocity: new Vec3(0, 0, 0), itemId: itemId(item), itemCount: item === AMMO_ITEM ? 8 : 1, pickupTime: 300 })
+    const dm = getDuke()
+    if (!dm) return
+    for (const sub of dm.maps) {
+      if (mapDone.has(sub.name)) continue
+      const b = sub.bbox
+      const near = [...serv.players].some(pl => { const dx = Math.max(b.x0 - pl.position.x, 0, pl.position.x - b.x1); const dz = Math.max(b.z0 - pl.position.z, 0, pl.position.z - b.z1); return Math.hypot(dx, dz) < 48 })
+      if (!near) continue
+      mapDone.add(sub.name) // enemies + pickups at the level's own sprite positions, once per level
+      let n = 0
+      for (const sp of sub.m.sprites) {
+        if (sp.cstat & 32768) continue
+        const kind = mapEnemy(sp.pic); const item = MAP_ITEMS[sp.pic]
+        if (!kind && !item) continue
+        const w = sub.toWorld(sp.x, sp.y)
+        const fy = sub.floorAt(w.x, w.z)
+        const y = (fy ? fy.y : sub.zToY(sp.z)) + 0.15
+        if (kind && n++ < 45) { try { duke.spawnEnemy(kind, new Vec3(w.x, y, w.z)) } catch {} }
+        if (item) { try { serv.spawnObject(mcData.entitiesByName.item.id, serv.overworld, new Vec3(w.x, y + 0.3, w.z), { velocity: new Vec3(0, 0, 0), itemId: itemId(item), itemCount: item === AMMO_ITEM ? 8 : 1, pickupTime: 300 }) } catch {} }
+      }
+      if (sub === dm.maps[0]) for (let i = 0; i < 3; i++) { try { serv.spawnObject(mcData.entitiesByName.item.id, serv.overworld, new Vec3(sub.start.x + i, sub.start.y + 0.5, sub.start.z), { velocity: new Vec3(0, 0, 0), itemId: itemId('firework_star'), itemCount: 2, pickupTime: 300 }) } catch {} }
     }
-    // pipebombs are not in E1L1's sprite list as such; drop a few near the start
-    for (let i = 0; i < 3; i++) serv.spawnObject(mcData.entitiesByName.item.id, serv.overworld, new Vec3(dm.start.x + i, dm.start.y + 0.5, dm.start.z), { velocity: new Vec3(0, 0, 0), itemId: itemId('firework_star'), itemCount: 2, pickupTime: 300 })
   }, 2500)
   serv.cleanupFunctions?.push(() => clearInterval(mapIv))
 
   serv.on('blockmashPopulate', ({ rx, rz, type }) => {
     if (type !== 'duke') return
-    if (getDuke(serv.overworld.seed | 0)) return
+    if (getDuke()) return
     const ox = rx * layout.REGION + 32; const oz = rz * layout.REGION + 32
     const G = layout.ZONE_G
     const at = (u, v, y = G + 1) => new Vec3(ox + u + 0.5, y, oz + v + 0.5)

@@ -255,7 +255,7 @@ module.exports = function installBlockMash (serv) {
     usage: '/mashup where|tp <zone>|boom',
     onlyPlayer: true,
     parse: (s) => s.trim().split(/\s+/),
-    async action ([sub, arg], ctx) {
+    async action ([sub, arg, arg2], ctx) {
       const pl = ctx.player
       if (sub === 'where' || !sub) {
         const i = layout.columnInfo(Math.floor(pl.position.x), Math.floor(pl.position.z), seed())
@@ -266,8 +266,10 @@ module.exports = function installBlockMash (serv) {
         if (!z || !TP[arg || 'duke']) return 'No such zone nearby'
         const dm = getDuke(seed())
         if ((arg || 'duke') === 'duke' && dm) {
-          bm.teleport(pl, new Vec3(dm.start.x, dm.start.y + 0.2, dm.start.z))
-          return 'Teleported to Duke Nukem 3D E1L1 (Hollywood Holocaust)'
+          const lv = Math.max(1, Math.min(dm.maps.length, parseInt(arg2) || 1))
+          const st = dm.maps[lv - 1].start
+          bm.teleport(pl, new Vec3(st.x, st.y + 0.2, st.z))
+          return `Teleported to Duke Nukem 3D ${dm.maps[lv - 1].name} start`
         }
         const p = TP[arg || 'duke'](z)
         const y = await surfaceY(p.x, p.z)

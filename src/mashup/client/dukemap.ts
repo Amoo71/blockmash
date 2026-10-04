@@ -9,7 +9,7 @@ export type VoxSource = { pos: number[], idx: number[], tc: number[] }
 export async function buildDukeMap (dm: any, base: string, tiles: Record<string, { w: number, h: number, avg?: number[] }>) {
   const { m, ox, oz, G, zref } = dm
   const W = m.walls; const S = m.sectors
-  const X = (bx: number) => ox + bx / 512; const Z = (by: number) => oz + by / 512; const Y = (bz: number) => Math.min(G + 30, G + (zref - bz) / 8192) // skyline towers capped at 30 blocks
+  const X = (bx: number) => ox + bx / 512; const Z = (by: number) => oz + by / 512; const Y = (bz: number) => G + (zref - bz) / 8192 // original Build scale
   const shadeC = (s: number) => Math.max(0.4, Math.min(1.7, 1.55 - s / 48))
   // ---- atlas
   const used = new Set<number>()

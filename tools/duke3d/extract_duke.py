@@ -11,7 +11,7 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(__file__))
 from dukegrp import open_grp, palette, tiles, tile_image, tile_offset, SHAREWARE_MD5
 from buildmap import read_map
-MAPS = ['E1L1']
+MAPS = ['E1L1', 'E1L2', 'E1L3', 'E1L4', 'E1L5', 'E1L6']
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 ZIP = os.environ.get('DUKE3D_SHAREWARE_ZIP', os.path.join(ROOT, 'vendor', 'duke3d', '3dduke13.zip'))

@@ -407,11 +407,12 @@ async function connect (connectOptions: ConnectOptions) {
 
       setLoadingScreenStatus('Starting local server')
       // BlockMash: locally extracted Duke3D E1L1 map for the polygon surface (never shipped; blocky fallback without it)
-      if (!globalThis.blockmashDukeRaw) {
-        try {
-          const r = await fetch('./duke/maps/E1L1.json')
-          if (r.ok) globalThis.blockmashDukeRaw = await r.json()
-        } catch {}
+      if (!globalThis.blockmashDukeMaps) {
+        const maps = {}
+        await Promise.all(['E1L1', 'E1L2', 'E1L3', 'E1L4', 'E1L5', 'E1L6'].map(async n => {
+          try { const r = await fetch(`./duke/maps/${n}.json`); if (r.ok) maps[n] = await r.json() } catch {}
+        }))
+        if (Object.keys(maps).length) globalThis.blockmashDukeMaps = maps
       }
       localServer = window.localServer = window.server = startLocalServer(serverOptions)
       // todo need just to call quit if started
