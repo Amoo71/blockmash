@@ -5,7 +5,7 @@
 // all meshes via a shared hole list and get a mesh-to-voxel rim (cut triangles voxelised into colour-matched blocks).
 import * as THREE from 'three'
 import { Vec3 } from 'vec3'
-import { surfaceMaterial, loadTex, GeoBuilder, addHoleUniform, dayUniform, inHole } from './surfmat'
+import { surfaceMaterial, loadTex, GeoBuilder, addHoleUniform, dayUniform, farUniform, inHole } from './surfmat'
 import { buildDukeMap, VoxSource } from './dukemap'
 import { buildZoneMeshes } from './zonemesh'
 import { triBoxOverlap } from '../surface/voxelize'
@@ -107,7 +107,7 @@ export async function initSurface () {
     let complete = true
     for (let i = 0; i < CS; i++) {
       for (let k = 0; k < CS; k++) {
-        const h = Math.floor(Math.min(H(i, k), H(i + 1, k), H(i, k + 1), H(i + 1, k + 1)) - 0.01) - 1
+        const h = Math.floor(Math.min(H(i, k), H(i + 1, k), H(i, k + 1), H(i + 1, k + 1)) - 0.15) - 1
         hh[i * CS + k] = h
         const top = blockName(x0 + i, h, z0 + k)
         if (top === undefined || top === null) { if (bot.world.getColumnAt?.(new Vec3(x0 + i, 0, z0 + k)) == null) complete = false; continue }
@@ -194,7 +194,7 @@ export async function initSurface () {
     const dm = (globalThis as any).blockmashDuke
     if (dm && n?.name === 'air' && o.name !== 'air' && o.name !== 'barrier') {
       const c = dm.col(p.x, p.z)
-      if (c && c.kind === 1 && p.y === c.top - 1) server.blockmash.addHole(p.x + 0.5, c.top + 0.3, p.z + 0.5, 0.95)
+      if (c && c.kind === 1 && p.y === c.top - 2 && !inHole(p.x + 0.5, c.top, p.z + 0.5)) server.blockmash.addHole(p.x + 0.5, c.top + 0.3, p.z + 0.5, 0.95)
     }
   })
   bot.on('chunkColumnLoad', (p: any) => { for (const [dx, dz] of [[0, 0], [16, 0], [0, 16], [16, 16]]) dirtyAt(p.x + dx - 8, p.z + dz - 8); dirtyAt(p.x, p.z); dirtyAt(p.x + 15, p.z + 15) })
@@ -252,7 +252,6 @@ export async function initSurface () {
       }
     }
     if (cells.size) void server.blockmash.surfaceVoxels([...cells.values()].slice(0, 600))
-    crater(h)
   }
   // scorch decal on the ground around the crater (soft dark disc, drawn on top of terrain)
   const decalTex = (() => {
@@ -294,7 +293,7 @@ export async function initSurface () {
         if (c.kind !== 1) return null
         const f = dmm.floorAt(x, z)
         if (!f || inHole(x, f.y, z, 0.25)) return null
-        if (blockName(Math.floor(x), c.top - 1, Math.floor(z)) === 'air') return null
+        if (blockName(Math.floor(x), c.top - 2, Math.floor(z)) === 'air') return null
         return f.y
       }
     }
@@ -321,7 +320,17 @@ export async function initSurface () {
   }
 
   // ---------------- per-frame driver
-  let lastZones = 0
+  let lastZones = 0; let lastFar = 0
+  const updateFar = (p: any) => {
+    let r = 16
+    for (let d = 16; d <= 256; d += 16) {
+      let ok = true
+      for (let a = 0; a < 8 && ok; a++) { const x = p.x + Math.cos(a * Math.PI / 4) * d; const z = p.z + Math.sin(a * Math.PI / 4) * d; if (bot.world.getColumnAt?.(new Vec3(Math.floor(x), 0, Math.floor(z))) == null) ok = false }
+      if (!ok) break
+      r = d
+    }
+    farUniform.value.set(p.x, p.z, Math.max(24, r - 10))
+  }
   const tick = () => {
     requestAnimationFrame(tick)
     const p = bot.entity?.position; if (!p) return
@@ -346,6 +355,7 @@ export async function initSurface () {
       if (ch.trees) { root.remove(ch.trees); ch.trees.geometry.dispose() }
       chunks.delete(k)
     }
+    if (performance.now() - lastFar > 500) { lastFar = performance.now(); updateFar(p) } else farUniform.value.x = p.x, farUniform.value.y = p.z
     if (performance.now() - lastZones > 2000) { lastZones = performance.now(); updateZones() }
     liftMobs()
     for (const zg of zoneGroups) {

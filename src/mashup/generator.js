@@ -78,10 +78,10 @@ function generation ({ version, seed = 1 } = {}) {
         const x = chunkX * 16 + i; const z = chunkZ * 16 + k
         const info = layout.columnInfo(x, z, seed)
         // block top must stay below all 4 corners of the smooth surface cell above it
-        info.h = Math.floor(Math.min(HS[i * 17 + k], HS[(i + 1) * 17 + k], HS[i * 17 + k + 1], HS[(i + 1) * 17 + k + 1]) - 0.01) - 1
+        info.h = Math.floor(Math.min(HS[i * 17 + k], HS[(i + 1) * 17 + k], HS[i * 17 + k + 1], HS[(i + 1) * 17 + k + 1]) - 0.15) - 1
         const dcol = dm && dm.col(x, z)
         const inDuke = dcol && dcol.kind !== 0
-        if (inDuke) { info.h = dcol.top - 1; info.biome = 'plains'; info.w = 1; info.G = dcol.top - 1 }
+        if (inDuke) { info.h = dcol.top - 2; info.biome = 'plains'; info.w = 1; info.G = dcol.top - 2 } // block top 1 below the polygon floor (no z-fighting)
         const { h, biome } = info
         col.fill(AIR)
         const put = (y, spec, force = true) => {

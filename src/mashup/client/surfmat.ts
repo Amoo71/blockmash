@@ -7,6 +7,8 @@ export const MAX_HOLES = 64
 export const holeUniform = { value: Array.from({ length: MAX_HOLES }, () => new THREE.Vector4(0, -1000, 0, 0)) }
 export const holeCount = { value: 0 }
 export const dayUniform = { value: 1 }
+/** xz of the player + radius of loaded block terrain: meshes are clipped there so nothing floats beyond loaded chunks */
+export const farUniform = { value: new THREE.Vector3(0, 0, 1e6) }
 export const holes: Array<{ x: number, y: number, z: number, r: number }> = []
 
 export function addHoleUniform (h: { x: number, y: number, z: number, r: number }) {
@@ -19,15 +21,19 @@ export const inHole = (x: number, y: number, z: number, pad = 0) => holes.some(h
 
 const HOLE_GLSL = /* glsl */`
 uniform vec4 uHoles[${MAX_HOLES}];
+uniform vec3 uFar;
 uniform int uHoleN;
 float holeShade (vec3 p) {
   float s = 1.0;
+  if (distance(p.xz, uFar.xy) > uFar.z) discard;
   for (int i = 0; i < ${MAX_HOLES}; i++) {
     if (i >= uHoleN) break;
     vec4 h = uHoles[i];
     float d = distance(p, h.xyz);
+    #ifndef NOHOLE
     if (d < h.w) discard;
-    s = min(s, mix(0.22, 1.0, clamp((d - h.w) / (0.7 * h.w + 0.3), 0.0, 1.0)));
+    #endif
+    s = min(s, mix(0.72, 1.0, clamp((d - h.w * 0.85) / (0.45 * h.w + 0.3), 0.0, 1.0)));
   }
   return s;
 }`
@@ -38,11 +44,12 @@ const white = () => { if (!whiteTex) { whiteTex = new THREE.DataTexture(new Uint
 type Opts = { map?: THREE.Texture | null, atlas?: boolean, alphaTest?: number, side?: THREE.Side, terrain?: boolean, textures?: THREE.Texture[] }
 
 export function surfaceMaterial (o: Opts = {}) {
-  const uniforms: Record<string, any> = { uHoles: holeUniform, uHoleN: holeCount, uDay: dayUniform, map: { value: o.map ?? white() }, uAtlas: { value: new THREE.Vector2(1, 1) } }
+  const uniforms: Record<string, any> = { uFar: farUniform, uHoles: holeUniform, uHoleN: holeCount, uDay: dayUniform, map: { value: o.map ?? white() }, uAtlas: { value: new THREE.Vector2(1, 1) } }
   const defs: Record<string, any> = {}
   if (o.atlas) defs.ATLAS = 1
   if (o.terrain) {
     defs.TERRAIN = 1
+    defs.NOHOLE = 1 // terrain is cut per removed block (cells vanish), not by a sphere
     if ((o as any).texNorm) defs.TEXNORM = 1
     o.textures!.forEach((t, i) => { uniforms['t' + i] = { value: t } })
   }

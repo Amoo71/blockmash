@@ -9,7 +9,7 @@ export type VoxSource = { pos: number[], idx: number[], tc: number[] }
 export async function buildDukeMap (dm: any, base: string, tiles: Record<string, { w: number, h: number, avg?: number[] }>) {
   const { m, ox, oz, G, zref } = dm
   const W = m.walls; const S = m.sectors
-  const X = (bx: number) => ox + bx / 512; const Z = (by: number) => oz + by / 512; const Y = (bz: number) => G + (zref - bz) / 8192
+  const X = (bx: number) => ox + bx / 512; const Z = (by: number) => oz + by / 512; const Y = (bz: number) => Math.min(G + 30, G + (zref - bz) / 8192) // skyline towers capped at 30 blocks
   const shadeC = (s: number) => Math.max(0.4, Math.min(1.7, 1.55 - s / 48))
   // ---- atlas
   const used = new Set<number>()
@@ -45,6 +45,12 @@ export async function buildDukeMap (dm: any, base: string, tiles: Record<string,
   const fz = (si: number, bx: number, by: number) => dm.floorZ(si, bx, by)
   const cz = (si: number, bx: number, by: number) => dm.ceilZ(si, bx, by)
   // ---- walls
+  let curSect = -1
+  const facesIn = (w: any, w2: any) => {
+    const dx = w2.x - w.x; const dy = w2.y - w.y; const l = Math.hypot(dx, dy) || 1
+    const mx = (w.x + w2.x) / 2 - dy / l * 24; const my = (w.y + w2.y) / 2 + dx / l * 24
+    return dm.sectorAt(mx, my) === curSect
+  }
   const wallQuad = (g: GeoBuilder, w: any, w2: any, z1a: number, z1b: number, z0a: number, z0b: number, pic: number, ref: number, sh: number) => {
     // z1 = top (smaller build z), z0 = bottom at both ends
     const t = tinfo(pic); if (!t) return
@@ -55,10 +61,11 @@ export async function buildDukeMap (dm: any, base: string, tiles: Record<string,
     const c = shadeC(sh); g.cur = avg(pic)
     const a = g.v(X(w.x), Y(z0a), Z(w.y), pan, vs(z0a), c, t); const b = g.v(X(w2.x), Y(z0b), Z(w2.y), pan + uL, vs(z0b), c, t)
     const d = g.v(X(w2.x), Y(z1b), Z(w2.y), pan + uL, vs(z1b), c, t); const e = g.v(X(w.x), Y(z1a), Z(w.y), pan, vs(z1a), c, t)
-    g.quad(a, b, d, e)
+    if (g !== solid || facesIn(w, w2)) g.quad(a, b, d, e); else g.quad(b, a, e, d)
     void tw
   }
   S.forEach((s: any, si: number) => {
+    curSect = si
     for (let i = s.wallptr; i < s.wallptr + s.wallnum; i++) {
       const w = W[i]; const w2 = W[w.p2]
       const fa = fz(si, w.x, w.y); const fb = fz(si, w2.x, w2.y); const ca = cz(si, w.x, w.y); const cb = cz(si, w2.x, w2.y)
@@ -96,7 +103,13 @@ export async function buildDukeMap (dm: any, base: string, tiles: Record<string,
       const c = shadeC(sh); solid.cur = avg(pic)
       const base = solid.n
       for (const p of pts) solid.v(X(p.x), Y(zf(p.x, p.y)), Z(p.y), p.x / 16, p.y / 16, c, t)
-      for (const [a, b, d] of tris) flip ? solid.tri(base + a, base + d, base + b) : solid.tri(base + a, base + b, base + d)
+      for (const [a, b, d] of tris) {
+        // floors face up, ceilings face down (FrontSide: from outside/below the level you look into it, no dark box)
+        const A = pts[a]; const B = pts[b]; const D = pts[d]
+        const ny = (B.y - A.y) * (D.x - A.x) - (B.x - A.x) * (D.y - A.y)
+        const up = ny > 0
+        if (up !== flip) solid.tri(base + a, base + b, base + d); else solid.tri(base + a, base + d, base + b)
+      }
     }
     plane(s.fpic, s.fshade, (x, y) => fz(si, x, y), false)
     if (!(s.cstat & 1)) plane(s.cpic, s.cshade, (x, y) => cz(si, x, y), true)
@@ -126,7 +139,7 @@ export async function buildDukeMap (dm: any, base: string, tiles: Record<string,
     } else { quad(1, 0); quad(0, 1) } // face sprite -> static cross billboard (cheap, merged)
   }
   const mk = (g: GeoBuilder, alpha: boolean) => {
-    const mat = surfaceMaterial({ map: atlas, atlas: true, side: THREE.DoubleSide, alphaTest: alpha ? 0.5 : undefined })
+    const mat = surfaceMaterial({ map: atlas, atlas: true, side: alpha ? THREE.DoubleSide : THREE.FrontSide, alphaTest: alpha ? 0.5 : undefined })
     mat.uniforms.uAtlas.value.set(AW, AH)
     const mesh = new THREE.Mesh(g.build(), mat)
     mesh.name = alpha ? 'duke-masked' : 'duke-level'

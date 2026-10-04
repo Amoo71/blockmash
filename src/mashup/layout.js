@@ -70,9 +70,9 @@ function columnInfo (x, z, seed) {
     w = smoothstep(1 - Math.hypot(dx, dz) / core.blend)
   }
   // smooth surface height (float) of the polygon terrain; the block layer stays just below it:
-  // top block y = h, its top face h + 1 <= hs - 0.01 (zones: hs = G + 1.03, so h = G as before)
-  const hs = lerp(nat + 1, G + 1.03, w)
-  const h = Math.floor(hs - 0.01) - 1
+  // top block y = h, its top face h + 1 <= hs - 0.01 (zones: hs = G + 1.2, so h = G as before)
+  const hs = lerp(nat + 1, G + 1.2, w)
+  const h = Math.floor(hs - 0.15) - 1
   const inCore = !!core && lx >= core.c0 && lx < core.c1 && lz >= core.c0 && lz < core.c1
   const biome = w > 0.5 ? (biomeAt(x, z, seed, h) === 'snowy' ? 'snowy' : 'plains') : biomeAt(x, z, seed, h)
   return { rx, rz, lx, lz, type, w, h, hs, G, inCore, u: core ? lx - core.c0 : 0, v: core ? lz - core.c0 : 0, biome }
@@ -90,7 +90,7 @@ function surfaceHeight (x, z, seed) {
   const dx = Math.max(core.c0 - lx, 0, lx - (core.c1 - 1))
   const dz = Math.max(core.c0 - lz, 0, lz - (core.c1 - 1))
   const w = smoothstep(1 - Math.hypot(dx, dz) / core.blend)
-  return lerp(nat + 1, G + 1.03, w)
+  return lerp(nat + 1, G + 1.2, w)
 }
 
 /** deterministic tree per 6x6 cell (shared by the block generator = hidden trunk and the client = low-poly tree) */

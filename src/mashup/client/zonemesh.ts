@@ -97,7 +97,7 @@ function buildDarkMod (rx: number, rz: number, seed: number) {
     for (let t = -1; t <= 129; t += 1) {
       const [u, v] = f(t); const [u2, v2] = f(t + 0.01)
       const dx = u2 - u; const dz = v2 - v; const l = Math.hypot(dx, dz); const nx = -dz / l * 3.2; const nz = dx / l * 3.2
-      const y = G + 1.04
+      const y = G + 1.25
       const a = cob.v(ox + u + nx, y, oz + v + nz, t / 3, 0, 1); const c = cob.v(ox + u - nx, y, oz + v - nz, t / 3, 6.4 / 3, 1)
       if (prev) cob.quad(prev[0], prev[1], c, a)
       prev = [a, c]
@@ -108,7 +108,7 @@ function buildDarkMod (rx: number, rz: number, seed: number) {
   for (let k = 0; k < N; k++) {
     const a0 = k / N * Math.PI * 2; const a1 = (k + 1) / N * Math.PI * 2
     const pt = (a: number, r: number, y: number) => cob.v(ox + 64 + Math.cos(a) * r, y, oz + 64 + Math.sin(a) * r, Math.cos(a) * r / 3, Math.sin(a) * r / 3, 1)
-    cob.quad(pt(a0, 3.5, G + 1.05), pt(a1, 3.5, G + 1.05), pt(a1, 9.3, G + 1.05), pt(a0, 9.3, G + 1.05))
+    cob.quad(pt(a0, 3.5, G + 1.26), pt(a1, 3.5, G + 1.26), pt(a1, 9.3, G + 1.26), pt(a0, 9.3, G + 1.26))
     const st = bag(b, 'stone'); st.cur = COL.stone
     st.wall(ox + 64 + Math.cos(a0) * 3.5, oz + 64 + Math.sin(a0) * 3.5, ox + 64 + Math.cos(a1) * 3.5, oz + 64 + Math.sin(a1) * 3.5, G + 0.9, G + 2, 0.8)
     st.wall(ox + 64 + Math.cos(a1) * 2.5, oz + 64 + Math.sin(a1) * 2.5, ox + 64 + Math.cos(a0) * 2.5, oz + 64 + Math.sin(a0) * 2.5, G + 0.9, G + 2, 0.7)
@@ -162,7 +162,7 @@ function buildYorg (rx: number, rz: number) {
   }
   const road = new GeoBuilder(); road.cur = COL.asphalt
   const kerb = new GeoBuilder()
-  const y = G + 1.03
+  const y = G + 1.24
   const STEP = 1
   for (let s = 0; s < L; s += STEP) {
     const p = at(s); const q = at(s + STEP)

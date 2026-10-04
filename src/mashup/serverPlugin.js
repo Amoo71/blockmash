@@ -224,7 +224,8 @@ module.exports = function installBlockMash (serv) {
   }
   bm.primeTnt = (p, fuseMs = 4000) => {
     const id = E('tnt')
-    const obj = id !== undefined ? serv.spawnObject(id, serv.overworld, p.offset(0.5, 0, 0.5), { velocity: new Vec3(0, 3, 0) }) : null
+    let obj = null
+    try { if (id !== undefined) obj = serv.spawnObject(id, serv.overworld, p.offset(0.5, 0, 0.5), { velocity: new Vec3(0, 3, 0) }) } catch {} // entity cap: still explode
     serv.playSound('entity.tnt.primed', serv.overworld, p)
     setTimeout(() => {
       if (obj) serv.destroyEntity(obj)
