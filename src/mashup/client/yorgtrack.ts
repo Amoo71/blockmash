@@ -61,16 +61,32 @@ export async function initYorgTrack () {
   const lod = (p: any) => {
     const q = (globalThis as any).blockmashQuality?.() ?? (mobile ? 'low' : 'medium')
     const R = q === 'low' ? 90 : q === 'medium' ? 170 : 400
-    const m4 = new THREE.Matrix4()
-    for (const { mesh, mats, tris } of meshes as any) {
-      if (mats.length === 1) continue
-      // Low (mobile default): per-prop draw distance by its triangle cost, decimating ~474k -> well under 100k tris
-      const Rm = q !== 'low' ? R : tris > 1000 ? 110 : tris > 300 ? 55 : 38
-      const lx = p.x - yt.OX; const lz = p.z - yt.OZ
-      const near = mats.map((e, i) => [i, (e[12] - lx) ** 2 + (e[14] - lz) ** 2] as [number, number]).filter(a => a[1] < Rm * Rm).sort((a, b) => a[1] - b[1])
-      near.forEach(([i], k) => { m4.fromArray(mats[i]); mesh.setMatrixAt(k, m4) })
-      mesh.count = near.length; mesh.instanceMatrix.needsUpdate = true
+    // Low (mobile default): per-prop draw distance by triangle cost + a global prop budget (nearest first),
+    // so ~474k track triangles become < ~70k on phones
+    const budget = q === 'low' ? 45000 : Infinity
+    const lx = p.x - yt.OX; const lz = p.z - yt.OZ
+    const cand: Array<[number, number, number]> = [] // dist2, mesh index, instance index
+    meshes.forEach(({ mats, tris }: any, mi: number) => {
+      const Rm = q !== 'low' ? R : mats.length === 1 ? 400 : tris > 1000 ? 110 : tris > 300 ? 55 : 38
+      mats.forEach((e: number[], i: number) => {
+        const d = mats.length === 1 && q !== 'low' ? 0 : (e[12] - lx) ** 2 + (e[14] - lz) ** 2
+        if (d < Rm * Rm) cand.push([d, mi, i])
+      })
+    })
+    cand.sort((a, b) => a[0] - b[0])
+    const lists: number[][] = meshes.map(() => [])
+    let used = 0
+    for (const [, mi, i] of cand) {
+      const t = (meshes[mi] as any).tris
+      if (used + t > budget && (meshes[mi] as any).mesh.name !== 'yorg-track') continue
+      used += t; lists[mi].push(i)
     }
+    const m4 = new THREE.Matrix4()
+    meshes.forEach(({ mesh, mats }, mi) => {
+      lists[mi].forEach((i, k) => { m4.fromArray(mats[i]); mesh.setMatrixAt(k, m4) })
+      mesh.count = lists[mi].length; mesh.instanceMatrix.needsUpdate = true
+    })
+    ;(globalThis as any).blockmashYorgTris = used
   }
 
   // mining the block layer under the track punches a hole into the track polygons
