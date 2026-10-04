@@ -1,0 +1,20 @@
+Yorg (c) Ya2 - https://www.ya2.it - https://github.com/cflavio/yorg
+Car models/textures: CC BY-SA (Ya2). Converted to JSON meshes / resized by BlockMash tools/yorg/fetch_yorg.py;
+the converted files remain under CC BY-SA.
+
+The code is licensed under GPLv3 (see the file licenses/gpl.txt for details).
+
+Several assets are from OpenGameArt.com, they are licensed under several forms
+of CC, look at licenses/licenses.txt for details.
+
+"Thanks" texture is CC BY (https://commons.wikimedia.org/wiki/File:Thank-you-word-cloud.jpg).
+
+The remaining assets are licensed under CC BY-SA.
+
+Sound effects attribution
+=========================
+
+fire: Michel Baradari https://opengameart.org/content/4-projectile-launches
+hit, lap, pitstop, rotate_all_hit, turbo: Little Robot Sound Factory https://opengameart.org/content/sci-fi-sound-effects-library
+crash_high_speed: Michel Baradari https://opengameart.org/content/2-high-quality-explosions
+rotate_all_fire, mine: Little Robot Sound Factory https://opengameart.org/content/electric-sound-effects-library

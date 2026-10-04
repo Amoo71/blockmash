@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "defaultHost": "<from-proxy>",
+  "defaultProxy": "proxy.mcraft.fun",
+  "mapsProvider": "",
+  "promoteServers": []
+}

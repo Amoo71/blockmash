@@ -1,0 +1,147 @@
+{
+ "source": "https://raw.githubusercontent.com/cflavio/yorg/master/",
+ "cars": {
+  "kronos": {
+   "maxSpeed": 120.0,
+   "acc": 2000,
+   "mass": 280,
+   "steering": [
+    30,
+    6
+   ],
+   "color": [
+    0,
+    0,
+    1,
+    1
+   ],
+   "tris": 3626
+  },
+  "themis": {
+   "maxSpeed": 122.0,
+   "acc": 2000,
+   "mass": 280,
+   "steering": [
+    30,
+    6
+   ],
+   "color": [
+    1,
+    0,
+    0,
+    1
+   ],
+   "tris": 2624
+  },
+  "diones": {
+   "maxSpeed": 118.0,
+   "acc": 2000,
+   "mass": 285,
+   "steering": [
+    30,
+    6
+   ],
+   "color": [
+    1,
+    1,
+    1,
+    1
+   ],
+   "tris": 3102
+  },
+  "iapeto": {
+   "maxSpeed": 116.0,
+   "acc": 2000,
+   "mass": 285,
+   "steering": [
+    30,
+    6
+   ],
+   "color": [
+    1,
+    1,
+    0,
+    1
+   ],
+   "tris": 3282
+  },
+  "iperion": {
+   "maxSpeed": 118.0,
+   "acc": 2000,
+   "mass": 285,
+   "steering": [
+    30,
+    6
+   ],
+   "color": [
+    0.8,
+    0.8,
+    0.8,
+    1
+   ],
+   "tris": 3492
+  },
+  "phoibe": {
+   "maxSpeed": 122.0,
+   "acc": 2000,
+   "mass": 280,
+   "steering": [
+    30,
+    6
+   ],
+   "color": [
+    0.6,
+    0.6,
+    1,
+    1
+   ],
+   "tris": 2914
+  },
+  "rea": {
+   "maxSpeed": 116.0,
+   "acc": 2000,
+   "mass": 285,
+   "steering": [
+    30,
+    6
+   ],
+   "color": [
+    0,
+    0,
+    0.6,
+    1
+   ],
+   "tris": 3444
+  },
+  "teia": {
+   "maxSpeed": 120.0,
+   "acc": 2000,
+   "mass": 280,
+   "steering": [
+    30,
+    6
+   ],
+   "color": [
+    0,
+    0,
+    0,
+    1
+   ],
+   "tris": 3824
+  }
+ },
+ "sounds": [
+  "engine",
+  "brake",
+  "crash",
+  "crash_high_speed",
+  "lap",
+  "countdown",
+  "turbo",
+  "hit",
+  "landing"
+ ],
+ "tracks": [
+  "orlando"
+ ]
+}
