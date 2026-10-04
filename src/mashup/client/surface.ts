@@ -86,6 +86,7 @@ export async function initSurface () {
               for (let z = Math.floor(Math.max(mnz, h.z - R1)); z <= Math.floor(Math.min(mxz, h.z + R1)); z++) {
                 const d = Math.hypot(x + 0.5 - h.x, y + 0.5 - h.y, z + 0.5 - h.z)
                 if (d < R0 || d > R1) continue
+                if (y + 0.5 > mxy - 0.05) continue // never stack a voxel on top of a floor
                 const k = x + ',' + y + ',' + z
                 if (cells.has(k)) continue
                 if (triBoxOverlap([x + 0.5, y + 0.5, z + 0.5], 0.5, A, B, C)) cells.set(k, [x, y, z, nearestBlock(s.tc[t], s.tc[t + 1], s.tc[t + 2])])
@@ -121,6 +122,9 @@ export async function initSurface () {
     for (const id of Object.keys(ents)) {
       const o = ents[id]; const en = bot.entities[id]
       if (!o || !en || en === bot.entity) continue
+      // hide level actors standing on level geometry that is not shown yet (beyond loaded chunks)
+      const far = farUniform.value; const inLvl = !!dm.mapAt(en.position.x, en.position.z)
+      o.visible = !inLvl || Math.hypot(en.position.x - far.x, en.position.z - far.y) < far.z
       const g = groundY(en.position.x, en.position.z)
       if (g != null && en.position.y < g && en.position.y > g - 1.2) o.position.y = Math.max(o.position.y, g)
     }
