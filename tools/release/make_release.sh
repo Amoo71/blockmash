@@ -7,7 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 export COREPACK_HOME=${COREPACK_HOME:-$HOME/.cache/corepack}
 PNPM="npx -y pnpm@9.15.9"
-VER=${VER:-0.6.0}
+VER=${VER:-0.7.0}
 STAGE=release/stage/BlockMash
 ITEMS=packages/free-mc-assets/minecraft-assets/data/1.14.4/items
 BDC=.cache/purebdcraft/assets/minecraft/textures/item

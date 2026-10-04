@@ -134,7 +134,7 @@ export function surfaceMaterial (o: Opts = {}) {
         float glow = (c.a > 0.95 && c.a < 0.99) ? 1.0 : 0.0;
         float shadeGlow = clamp((vCol.r - 1.58) * 8.0, 0.0, 1.0);
         // outdoor sectors follow the sun/moon, interiors keep their Build sector shade
-        vec3 amb = mix(vec3(uIndoor), uSky * uDay, vEnv.x);
+        vec3 amb = mix(vec3(uIndoor), uSky * max(uDay, 0.42), vEnv.x);
         if (uShOn > 0.5 && vEnv.x > 0.5) amb *= mix(0.55, 1.0, sunVis()) * 1.0;
         vec3 pl = vec3(0.0);
         for (int i = 0; i < ${MAX_LIGHTS}; i++) {
@@ -145,7 +145,7 @@ export function surfaceMaterial (o: Opts = {}) {
         vec3 col = c.rgb * vCol * sh * (max(amb, vec3(shadeGlow * 0.9)) + pl);
         col = mix(col, c.rgb * uGlow, glow);
         // distance fog (denser in sectors with a high Build visibility value) + height fog in low ground
-        float fd = clamp((vDist * (0.8 + vEnv.y * 1.6) - uFogP.x) / max(1.0, uFogP.y - uFogP.x), 0.0, 1.0);
+        float fd = clamp((vDist * (0.9 + vEnv.y * 0.5) - uFogP.x) / max(1.0, uFogP.y - uFogP.x), 0.0, 1.0);
         float fh = clamp((uFogP.z - vW.y) / 12.0, 0.0, 1.0) * uFogP.w * smoothstep(4.0, 48.0, vDist);
         col = mix(col, uFogC, max(fd, fh));
         gl_FragColor = vec4(col, 1.0);

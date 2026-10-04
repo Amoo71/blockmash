@@ -360,10 +360,12 @@ class StarField {
         const material = new StarfieldMaterial()
         material.blending = THREE.AdditiveBlending
         material.depthTest = false
-        material.transparent = true
+        material.depthWrite = false
+        material.transparent = false // opaque pass, drawn first (renderOrder): the world occludes the stars
 
         // Create points and add them to the scene
         this.points = new THREE.Points(geometry, material)
+        this.points.renderOrder = -900
         this.scene.add(this.points)
 
         const clock = new THREE.Clock()

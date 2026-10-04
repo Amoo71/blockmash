@@ -34,8 +34,12 @@ export function initAtmosphere () {
   let P = PRESET[q]
 
   // ---------------- tone mapping + bloom (renderer.render is wrapped so the viewer loop stays untouched)
-  renderer.toneMapping = THREE.ACESFilmicToneMapping
-  renderer.toneMappingExposure = 1.35
+  // soft-shoulder tone curve: MC/Duke colours below 0.8 stay exactly as authored, HDR (glow, explosions, lights) rolls off
+  THREE.ShaderChunk.tonemapping_pars_fragment = THREE.ShaderChunk.tonemapping_pars_fragment.replace(
+    'vec3 CustomToneMapping( vec3 color ) { return color; }',
+    'vec3 CustomToneMapping( vec3 color ) { color *= toneMappingExposure; vec3 k = step(0.8, color); return mix(color, 0.8 + 0.2 * (1.0 - exp(-(color - 0.8) / 0.2)), k); }')
+  renderer.toneMapping = THREE.CustomToneMapping
+  renderer.toneMappingExposure = 1
   let composer: EffectComposer | null = null; let renderPass: RenderPass | null = null; let bloom: UnrealBloomPass | null = null
   const rawRender = renderer.render.bind(renderer)
   let inComposer = false
@@ -101,7 +105,7 @@ export function initAtmosphere () {
   const dyn: L[] = []
   const addLight = (l: L) => { if (l.key) { const o = dyn.find(d => d.key === l.key); if (o) { Object.assign(o, l); return } } dyn.push(l); if (dyn.length > 48) dyn.shift() }
   const hook = (serv: any) => {
-    serv.on('blockmashExplosion', ({ center, radius }: any) => addLight({ x: center.x, y: center.y + 1, z: center.z, r: 10 + radius * 3, c: [3, 1.7, 0.6], t0: performance.now(), dur: 900, prio: 10 }))
+    serv.on('blockmashExplosion', ({ center, radius }: any) => addLight({ x: center.x, y: center.y + 1, z: center.z, r: 10 + radius * 3, c: [3, 1.7, 0.6], t0: performance.now(), dur: 1500, prio: 10 }))
     serv.on('blockmashDuke', (ev: any) => {
       const now = performance.now()
       if (ev.type === 'fire' && ev.player === bot.entity?.id) { const p = bot.entity.position; addLight({ x: p.x, y: p.y + 1.5, z: p.z, r: 7, c: [2.2, 1.7, 0.8], t0: now, dur: 110, prio: 9 }) }
@@ -138,9 +142,9 @@ export function initAtmosphere () {
       void main(){
         vec4 t = texture2D(map, vec2(vUv.x * 2.0, vUv.y)); // panorama twice around (Build: 8 panels = 180 deg at this scale)
         float lum = dot(t.rgb, vec3(0.3, 0.59, 0.11));
-        vec3 day = mix(uSky, t.rgb * 0.9 + uSky * 0.25, 0.55 + 0.45 * smoothstep(0.02, 0.2, lum));
+        vec3 day = uSky * (0.62 + 0.45 * lum); // by day the skyline is a hazy silhouette in the MC sky colour
         vec3 c = mix(day, t.rgb, uNight) + t.rgb * smoothstep(0.35, 0.7, lum) * uNight * 1.4; // lit windows bloom at night
-        float a = smoothstep(1.0, 0.72, vUv.y) * uFade * t.a;
+        float a = smoothstep(1.0, 0.72, vUv.y) * uFade * t.a * mix(0.45, 1.0, uNight);
         gl_FragColor = vec4(mix(uSky, c, a), 1.0); // opaque, not tone mapped: matches the MC sky colour above the skyline
       }`
   })
@@ -182,7 +186,7 @@ export function initAtmosphere () {
   toast.style.display = 'none'
 
   // ---------------- per-frame
-  let env = { cave: 0, dark: 0 }; let lastScan = 0; let lastEnv = 0; let lastCast = 0
+  let env = { cave: 0, dark: 0 }; let lastT = 0; let lastScan = 0; let lastEnv = 0; let lastCast = 0
   let target = { cave: 0, dark: 0 }
   const seed = () => (server?.overworld?.seed ?? 0) | 0
   const covered = (p: any) => {
@@ -204,7 +208,8 @@ export function initAtmosphere () {
       const info = layout.columnInfo(Math.floor(p.x), Math.floor(p.z), seed())
       target = { cave: p.y < 60 && covered(p) ? 1 : 0, dark: info.type === 'darkmod' && info.w > 0.5 ? 1 : 0 }
     }
-    env = { cave: lerp(env.cave, target.cave, 0.05), dark: lerp(env.dark, target.dark, 0.03) }
+    const dt = Math.min(0.5, (now - (lastT || now)) / 1000); lastT = now
+    env = { cave: lerp(env.cave, target.cave, 1 - Math.exp(-dt * 3)), dark: lerp(env.dark, target.dark, 1 - Math.exp(-dt * 1.5)) }
     // sky / fog colour: MC day colour -> night, darkened in the Dark Mod quarter and caves
     // the MC sky colour (dayCycle/water.ts assign a new Color object whenever it changes) is our base
     if (scene.background !== ownBg) { if (scene.background instanceof THREE.Color) baseBg.copy(scene.background); scene.background = ownBg }
@@ -214,8 +219,8 @@ export function initAtmosphere () {
     ownBg.copy(fc)
     fogColor.value.copy(fc)
     const viewDist = ((viewer.world?.viewDistance ?? 6) * 16) || 96
-    const far = lerp(lerp(viewDist * 1.1 * P.fog, viewDist * 0.7, env.dark), 34, env.cave)
-    const near = lerp(far * 0.42, 4, env.cave)
+    const far = lerp(lerp(Math.max(160, viewDist * 1.2) * P.fog, Math.max(70, viewDist * 0.6), env.dark), 34, env.cave)
+    const near = lerp(far * 0.5, 4, env.cave)
     if (!(scene.fog && (scene.fog as THREE.Fog).color?.getHex() === 0x0000ff)) { // keep the underwater fog from water.ts
       if (!scene.fog) scene.fog = new THREE.Fog(fc, near, far)
       const f = scene.fog as THREE.Fog; f.color.copy(fc); f.near = near; f.far = far
@@ -226,8 +231,12 @@ export function initAtmosphere () {
     glowBoost.value = 2.4
     // dayCycle.ts sets the ambient intensity on time changes; caves and the Dark Mod quarter scale it down
     const amb = viewer.ambientLight as any
-    if (amb) { if (amb.__set !== amb.intensity) amb.__base = amb.intensity; amb.intensity = amb.__set = amb.__base * lerp(1, 0.4, Math.max(env.cave, env.dark * 0.8)) }
-    renderer.toneMappingExposure = lerp(1.35, 1.15, night) * lerp(1, 1.25, env.cave)
+    const dimK = Math.max(env.cave, env.dark * 0.8)
+    if (amb) { if (amb.__set !== amb.intensity) amb.__base = amb.intensity; amb.intensity = amb.__set = amb.__base * lerp(1, 0.32, dimK) }
+    const sl = sun as any
+    if (sl.__set !== sl.intensity) sl.__base = sl.intensity
+    sl.intensity = sl.__set = sl.__base * lerp(1, 0.1, Math.max(env.cave, env.dark * 0.6))
+    renderer.toneMappingExposure = lerp(1, 1.08, night) * lerp(1, 1.15, env.cave)
     // sun follows the MC clock (moon at night)
     const dir = new THREE.Vector3(Math.sin(sunA), Math.abs(sunUp) < 0.08 ? 0.08 : Math.cos(sunA), 0.35)
     if (sunUp < 0) dir.multiplyScalar(-1)
@@ -264,7 +273,7 @@ export function initAtmosphere () {
     let fade = 0; let skyPic = 89
     if (dm?.bbox && man?.skies) {
       const b = dm.bbox; const d = Math.hypot(Math.max(b.x0 - p.x, 0, p.x - b.x1), Math.max(b.z0 - p.z, 0, p.z - b.z1))
-      fade = Math.max(0, Math.min(1, 1 - (d - 40) / 160)) * (1 - env.cave)
+      fade = Math.max(0, Math.min(1, 1 - d / 90)) * (1 - env.cave) * (1 - env.dark)
       let best = 1e9
       for (const L of ((globalThis as any).blockmashDukeLevels ?? [])) {
         const bb = L.sub.bbox; const dd = Math.hypot(Math.max(bb.x0 - p.x, 0, p.x - bb.x1), Math.max(bb.z0 - p.z, 0, p.z - bb.z1))
@@ -283,6 +292,7 @@ export function initAtmosphere () {
     }
     void dayUniform
   }
+  ;(globalThis as any).blockmashAtmo = () => ({ q, env, target, amb: viewer.ambientLight?.intensity, sun: sun.intensity, fog: (scene.fog as any)?.far, lights: lightN.value })
   tick()
   console.log('[blockmash] atmosphere ready, quality', q)
 }
