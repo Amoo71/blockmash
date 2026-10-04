@@ -198,7 +198,7 @@ export abstract class WorldRendererCommon<WorkerSend = any, WorkerReceive = any>
       const loadBlockStates = async () => {
         return new Promise(resolve => {
           if (this.customBlockStatesData) return resolve(this.customBlockStatesData)
-          return loadJSON(`/blocksStates/${this.texturesVersion}.json`, (data) => {
+          return loadJSON(`blocksStates/${this.texturesVersion}.json`, (data) => {
             this.downloadedBlockStatesData = data
             this.renderUpdateEmitter.emit('blockStatesDownloaded')
             resolve(data)
