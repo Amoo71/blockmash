@@ -22,7 +22,7 @@ while(q.length&&n<(+process.env.MAXN||400000)){const s=q.shift();n++
  for(const [dx,dz] of dirs){ // running jump, simulated like the client controller
   {let x=s.x,z=s.z,y=s.y,vy=0.5,ok=false;for(let t=0;t<24;t++){const r=P.slide(x,z,y,dx*0.5,dz*0.5,0.3,1.5);x=r.x;z=r.z;const g=P.ground(x,z,y);y+=vy;vy=(vy-0.08)*0.98;if(!g||g.floor===-Infinity)break;if(y+1.5>g.ceil){y=Math.min(y,g.ceil-1.5);if(vy>0)vy=0}if(y<=g.floor){y=g.floor;ok=true;break}}
    if(ok&&Math.hypot(x-s.x,z-s.z)>0.6)push(x,z,y,s)}
-for(const [hy,h] of [[0,H],[JUMP,0.9],[0,0.9]]){const yy=s.y+hy;const r=P.slide(s.x,s.z,yy,dx,dz,0.3,h,STEP);if(Math.hypot(r.x-s.x,r.z-s.z)<0.2)continue;const g=P.ground(r.x,r.z,yy,0.3,STEP);if(!g)continue;if(g.ceil-g.floor<0.9||g.floor===-Infinity||g.floor>yy+STEP)continue;push(r.x,r.z,g.floor,s)}}}
+const g0=P.ground(s.x,s.z,s.y,0.3,STEP);for(const [hy,h] of [[0,H],[JUMP,0.9],[0,0.9]]){const yy=Math.min(s.y+hy,g0?g0.ceil-h:s.y+hy);if(yy<s.y-0.01)continue;const r=P.slide(s.x,s.z,yy,dx,dz,0.3,h,STEP);if(Math.hypot(r.x-s.x,r.z-s.z)<0.2)continue;const g=P.ground(r.x,r.z,yy,0.3,STEP);if(!g)continue;if(g.ceil-g.floor<0.9||g.floor===-Infinity||g.floor>yy+STEP)continue;push(r.x,r.z,g.floor,s)}}}
 console.log(L,'states',n,'found',!!found)
 if(found){let c=found,k=0;const path=[];while(c){path.unshift(c);c=c.from};console.log('path len',path.length,'start',path[0],'end',found);fs.writeFileSync('/tmp/'+L+'_path.json',JSON.stringify(path.map(p=>[+p.x.toFixed(2),+p.y.toFixed(2),+p.z.toFixed(2)])))}
 else{ // report farthest/highest reached sectors
