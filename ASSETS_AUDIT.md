@@ -54,6 +54,8 @@ Git history was rewritten so the upstream Mojang-derived files never appear in a
 ## Mashup content
 
 ### Duke Nukem 3D (phase 3)
+**Public site (GitHub Pages):** ships the *complete, unmodified* shareware package `duke-shareware/3dduke13.zip` (sha256 `c67efd179022bc6d9bde54f404c707cbcbdc15423c20be72e277bc2bdddf3d0e`, byte-identical to https://archive.org/download/3dduke13/3dduke13.zip; `make_pages.sh` verifies the hash). Its `LICENSE.TXT` (inside the zip, untouched) lets free WWW sites offer the complete unmodified shareware for download without charge. The browser downloads it, unpacks it client-side and caches it in IndexedDB; **no extracted Duke files are hosted**. Duke Nukem / Duke Nukem 3D are trademarks of Gearbox Software / 3D Realms; BlockMash is not affiliated with them.
+
 | What | Source | License / status |
 |---|---|---|
 | Enemy sprites (Assault Trooper, Pig Cop, Octabrain, Battlelord), HUD weapons, pickups, explosions, 55 sounds | Duke Nukem 3D **shareware v1.3d** `3dduke13.zip` (md5 04e4ca70…), read from `vendor/duke3d/` by `tools/duke3d/extract_duke.py` into `assets/duke/` | © 3D Realms. Shareware licence: free redistribution **only of the complete, unmodified package**. Extracted files are therefore gitignored, generated locally, and **must not be published**. A build containing `dist/duke/` is local-only. Without the zip the game falls back to Minecraft-style models and silent weapons. |

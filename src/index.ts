@@ -75,7 +75,7 @@ import { connectToPeer } from './localServerMultiplayer'
 import CustomChannelClient from './customClient'
 import { loadScript } from 'prismarine-viewer/viewer/lib/utils'
 import { registerServiceWorker } from './serviceWorker'
-import { dukeUrl, getDukeManifest, initDukeButton } from './mashup/client/dukedata'
+import { dukeAutoLoad, dukeUrl, getDukeManifest, initDukeButton } from './mashup/client/dukedata'
 import { appStatusState, lastConnectOptions } from './react/AppStatusProvider'
 
 import { fsState } from './loadSave'
@@ -409,6 +409,9 @@ async function connect (connectOptions: ConnectOptions) {
 
       setLoadingScreenStatus('Starting local server')
       // BlockMash: locally extracted Duke3D E1L1 map for the polygon surface (never shipped; blocky fallback without it)
+      setLoadingScreenStatus('Lade Duke Nukem 3D Shareware…')
+      await dukeAutoLoad()
+      setLoadingScreenStatus('Starting local server')
       if (!globalThis.blockmashDukeMaps && await getDukeManifest()) {
         globalThis.blockmashDukeTiles = (await getDukeManifest())?.tiles // sprite sizes for the Build collision
         const maps = {}

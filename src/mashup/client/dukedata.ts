@@ -243,6 +243,44 @@ export async function importDuke (file: Blob & { name?: string }, progress: (msg
   return { files: out.size, tiles: Object.keys(meta).length, sounds: snd.length }
 }
 
+// ---------------------------------------------------------------- automatic download of the shareware package
+// The public site ships the complete, unmodified shareware 3dduke13.zip (redistribution allowed by its LICENSE.TXT);
+// it is fetched once, unpacked here in the browser and cached in IndexedDB.
+export const SHAREWARE_URL = './duke-shareware/3dduke13.zip'
+let autoP: Promise<boolean> | null = null
+export function dukeAutoLoad (): Promise<boolean> {
+  autoP ??= (async () => {
+    if (await loadDukeCache()) return true
+    if (!(globalThis as any).blockmashNoDukeOnDisk) return false // local build: ./duke on disk
+    const ov = document.createElement('div'); ov.id = 'bm-duke-auto'
+    ov.style.cssText = 'position:fixed;left:50%;bottom:18%;transform:translateX(-50%);z-index:100000;width:min(86vw,420px);background:#14100c;border:2px solid #b8860b;border-radius:8px;padding:12px 14px;font:14px sans-serif;color:#ffcc33;text-align:center;box-shadow:0 0 20px #000'
+    ov.innerHTML = '<div>Lade Duke Nukem 3D Shareware…</div><div style="height:10px;background:#333;border-radius:5px;margin-top:8px;overflow:hidden"><div id="bm-duke-auto-bar" style="height:100%;width:0;background:#ffcc33;transition:width .2s"></div></div><div id="bm-duke-auto-msg" style="margin-top:6px;font-size:11px;color:#bbb"></div>'
+    const mount = () => document.body ? document.body.append(ov) : setTimeout(mount, 50); mount()
+    const bar = () => ov.querySelector('#bm-duke-auto-bar') as HTMLElement; const msg = (t: string) => { const m = ov.querySelector('#bm-duke-auto-msg'); if (m) m.textContent = t }
+    try {
+      const r = await fetch(SHAREWARE_URL)
+      if (!r.ok || !r.body) throw new Error('HTTP ' + r.status)
+      const total = +(r.headers.get('content-length') ?? 0) || 5924374
+      const rd = r.body.getReader(); const parts: Uint8Array[] = []; let got = 0
+      for (;;) { const { done, value } = await rd.read(); if (done) break; parts.push(value); got += value.length; bar().style.width = Math.min(70, got / total * 70) + '%'; msg(`${(got / 1048576).toFixed(1)} / ${(total / 1048576).toFixed(1)} MB`) }
+      let step = 0
+      await importDuke(new Blob(parts as any, { type: 'application/zip' }), m => { step++; bar().style.width = Math.min(99, 70 + step * 3) + '%'; msg(m) })
+      for (const u of files.values()) URL.revokeObjectURL(u)
+      files.clear(); manifestP = null
+      await loadDukeCache()
+      bar().style.width = '100%'; msg('fertig')
+      setTimeout(() => ov.remove(), 600)
+      return files.size > 0
+    } catch (e: any) {
+      console.warn('[blockmash] Duke auto download failed', e)
+      msg('Download fehlgeschlagen: ' + (e?.message ?? e) + ' – bitte 3dduke13.zip manuell wählen')
+      setTimeout(() => ov.remove(), 5000)
+      return false
+    }
+  })()
+  return autoP
+}
+
 // ---------------------------------------------------------------- subtle loader button (like the sm64 "Load ROM…")
 export function initDukeButton () {
   if (document.getElementById('bm-duke')) return
@@ -305,5 +343,6 @@ export function initDukeButton () {
     bar.style.display = playing && !msg.textContent ? 'none' : 'flex'
   }, 500)
   ;(globalThis as any).blockmashDukeImport = importDuke
-  void loadDukeCache().then(async () => { refresh(); if (!dukeImported() && !(await getDukeManifest())) prompt() })
+  // automatic shareware download first; the manual pick is only the fallback when that fails
+  void dukeAutoLoad().then(async () => { refresh(); if (!dukeImported() && !(await getDukeManifest())) prompt() })
 }
