@@ -6,6 +6,7 @@ const { Vec3 } = require('vec3')
 const layout = require('./layout')
 const makeResolver = require('./blocks')
 const { getDuke } = require('./surface/dukeworld')
+const { makePhys } = require('./surface/dukephys')
 const { getYorg } = require('./surface/yorgworld')
 
 const TP = {
@@ -38,7 +39,16 @@ module.exports = function installBlockMash (serv) {
   }
 
   // ---- spawn point: the start village well
+  // with the Duke data loaded (in-browser loader or ./duke) a new world starts at the E1L1 start
+  bm.dukeStart = (lv = 1) => {
+    const dm = getDuke(seed())
+    if (!dm?.maps?.length) return null
+    const m = dm.maps[Math.max(1, Math.min(dm.maps.length, lv)) - 1]
+    return { pos: new Vec3(m.start.x, m.start.y + 0.2, m.start.z), name: m.name }
+  }
   const spawnFor = () => {
+    const ds = bm.dukeStart(1)
+    if (ds) return ds.pos
     const c = layout.regionCenter(0, 0)
     const p = TP.village(c)
     const G = layout.zoneGround(0, 0, 'village', seed())
@@ -54,12 +64,62 @@ module.exports = function installBlockMash (serv) {
   }
 
   // ---- mobs
+  // flying-squid's entity physics pushes a standing mob up by half its height every other tick
+  // (collision answer = -size/2), which made every mob bounce. Own simple AABB-ish physics instead.
+  const solidAt = async (world, x, y, z) => mcData.blocks[await world.getBlockType(new Vec3(Math.floor(x), Math.floor(y), Math.floor(z)))]?.boundingBox === 'block'
+  const holeAt = (x, y, z) => bm.surfaceHoles?.some(h => Math.hypot(h.x - x, h.y - y, h.z - z) < h.r)
+  const dukePhysics = (e, d, delta) => {
+    const P = makePhys(d); const v = e.velocity; const np = e.position.clone()
+    const fly = !e.gravity?.y; const h = Math.min(1.6, e.size?.y ?? 1.6)
+    const g0 = P.ground(np.x, np.z, np.y, 0.35, 0.6)
+    if (!g0 || np.y < g0.floor - 0.6 || holeAt(np.x, g0.floor, np.z)) return null
+    const r = P.slide(np.x, np.z, np.y, v.x * delta, v.z * delta, 0.35, h, fly ? 99 : 0.6)
+    np.x = r.x; np.z = r.z
+    const g = P.ground(np.x, np.z, np.y, 0.35, fly ? 99 : 0.6) ?? g0
+    if (!fly) v.y = Math.max(-e.terminalvelocity.y, v.y + e.gravity.y * delta)
+    np.y += v.y * delta
+    let onGround = false
+    if (holeAt(np.x, g.floor, np.z)) return { position: np, onGround }
+    if (np.y <= g.floor) { np.y = g.floor; v.y = Math.max(0, v.y); onGround = true }
+    if (np.y + h > g.ceil) { np.y = Math.max(g.floor, g.ceil - h); v.y = Math.min(0, v.y) }
+    if ((onGround || fly) && Date.now() - (e._steerAt || 0) > 300) { v.x *= 0.5; v.z *= 0.5 }
+    return { position: np, onGround }
+  }
+  const mobPhysics = (e) => async (delta) => {
+    const dmv = getDuke(seed()); const dd = dmv && dmv.mapAt(e.position.x, e.position.z)
+    if (dd) { const r = dukePhysics(e, dd, delta); if (r) return r }
+    const v = e.velocity; const w = e.world; const np = e.position.clone()
+    const hw = Math.min(0.45, (e.size?.x ?? 0.6) / 2); const h = e.size?.y ?? 1.8
+    if (e.gravity && e.gravity.y) v.y = Math.max(-e.terminalvelocity.y, Math.min(e.terminalvelocity.y, v.y + e.gravity.y * delta))
+    for (const ax of ['x', 'z']) {
+      const d = v[ax] * delta; if (!d) continue
+      const edge = np[ax] + d + Math.sign(d) * hw
+      const qx = ax === 'x' ? edge : np.x; const qz = ax === 'z' ? edge : np.z
+      if (await solidAt(w, qx, np.y + 0.1, qz) || await solidAt(w, qx, np.y + Math.min(h - 0.1, 1.5), qz)) v[ax] = 0
+      else np[ax] += d
+    }
+    let onGround = false
+    const dy = v.y * delta
+    if (dy <= 0) {
+      const fy = np.y + dy
+      if (await solidAt(w, np.x, fy - 0.001, np.z)) { np.y = Math.floor(fy - 0.001) + 1; v.y = 0; onGround = true } else np.y = fy
+    } else if (await solidAt(w, np.x, np.y + h + dy, np.z)) v.y = 0
+    else np.y += dy
+    // friction only when the AI is not steering (it re-sets the velocity every 150 ms)
+    if ((onGround || !e.gravity?.y) && Date.now() - (e._steerAt || 0) > 300) {
+      const f = (e.friction?.x ?? 15) * delta
+      v.x = v.x > 0 ? Math.max(0, v.x - f) : Math.min(0, v.x + f)
+      v.z = v.z > 0 ? Math.max(0, v.z - f) : Math.min(0, v.z + f)
+    }
+    return { position: np, onGround }
+  }
   bm.spawn = (name, pos, opts = {}) => {
     const id = E(name)
     if (id === undefined) return null
     const m = serv.spawnMob(id, serv.overworld, pos.clone(), { yaw: Math.floor(Math.random() * 256) - 128 })
     m.health = opts.health ?? ({ iron_golem: 100, villager: 20, zombie: 20, skeleton: 20, creeper: 20, spider: 16 }[name] ?? 10)
     m.size = name === 'iron_golem' ? new Vec3(1.4, 2.7, 1.4) : m.size
+    m.calculatePhysics = mobPhysics(m)
     mobs.set(m.id, { name, kind: opts.kind || 'passive', home: pos.clone(), dir: null, next: 0, cooldown: 0, ...opts })
     return m
   }
@@ -78,6 +138,8 @@ module.exports = function installBlockMash (serv) {
         const c = layout.regionCenter(rx, rz)
         if (Math.hypot(c.x - p.x, c.z - p.z) > 150) continue
         populated.add(key)
+        const dmv = getDuke(seed())
+        if (dmv && (dmv.voidAt(c.x, c.z) || dmv.mapAt(c.x, c.z))) continue // Duke mode: no MC surface mobs around the levels
         if (type === 'village') {
           const G = layout.zoneGround(rx, rz, 'village', seed())
           const base = TP.village(c)
@@ -100,7 +162,30 @@ module.exports = function installBlockMash (serv) {
   }
 
   const isNight = () => { const t = (serv.time || 0) % 24000; return t > 13000 && t < 23000 }
+  // Duke mode: MC hostiles only underground (in the MC world under the Duke floors), any time of day
+  async function caveSpawns (player, d) {
+    const f = d.floorAt(player.position.x, player.position.z)
+    if (!f || player.position.y > f.y - 3 || player.gameMode !== 0) return
+    let near = 0
+    for (const [id, m] of mobs) if (m.kind === 'hostile' && serv.entities[id] && serv.entities[id].position.distanceTo(player.position) < 32) near++
+    if (near >= 4 || Math.random() < 0.5) return
+    for (let tries = 0; tries < 12; tries++) {
+      const a = Math.random() * Math.PI * 2; const r = 8 + Math.random() * 10
+      const x = Math.floor(player.position.x + Math.cos(a) * r); const z = Math.floor(player.position.z + Math.sin(a) * r)
+      const ff = d.floorAt(x + 0.5, z + 0.5); if (!ff) continue
+      for (let dy = -4; dy <= 4; dy++) {
+        const y = Math.floor(player.position.y) + dy
+        if (y > ff.y - 3) break
+        const w = serv.overworld
+        if ((await w.getBlockStateId(new Vec3(x, y, z))) === 0 && (await w.getBlockStateId(new Vec3(x, y + 1, z))) === 0 && (await w.getBlockStateId(new Vec3(x, y - 1, z))) !== 0) {
+          bm.spawn(HOSTILE[Math.floor(Math.random() * 3)], new Vec3(x + 0.5, y, z + 0.5), { kind: 'hostile' }); return
+        }
+      }
+    }
+  }
   async function nightSpawns (player) {
+    const dmv = getDuke(seed())
+    if (dmv) { const d = dmv.mapAt(player.position.x, player.position.z); if (d) return caveSpawns(player, d); if (dmv.voidAt(player.position.x, player.position.z)) return }
     if (!isNight() || player.gameMode !== 0) return
     let near = 0
     for (const [id, m] of mobs) if (m.kind === 'hostile' && serv.entities[id] && serv.entities[id].position.distanceTo(player.position) < 64) near++
@@ -123,7 +208,7 @@ module.exports = function installBlockMash (serv) {
   const moveTowards = (e, target, speed) => {
     const dx = target.x - e.position.x; const dz = target.z - e.position.z
     const len = Math.hypot(dx, dz) || 1
-    e.velocity.x = dx / len * speed; e.velocity.z = dz / len * speed
+    e.velocity.x = dx / len * speed; e.velocity.z = dz / len * speed; e._steerAt = Date.now()
     let b = Math.round(Math.atan2(-dx, dz) * 128 / Math.PI)
     if (b > 127) b -= 256
     if (b < -128) b += 256
@@ -246,7 +331,7 @@ module.exports = function installBlockMash (serv) {
       }
     })
     player.on('spawned', () => {
-      player.chat('§6BlockMash§r – mine it, blow it up, build it. §7/mashup tp duke|darkmod|yorg|village, /mashup where')
+      player.chat('§6BlockMash§r – mine it, blow it up, build it. §7/duke (E1L1 + weapons), /mashup tp duke 1-6|darkmod|yorg|village, /mashup where')
     })
   })
 
@@ -263,14 +348,15 @@ module.exports = function installBlockMash (serv) {
         return `Zone: ${i.type} (region ${i.rx},${i.rz}), biome ${i.biome}`
       }
       if (sub === 'tp') {
-        const z = layout.findZone(arg || 'duke', seed(), pl.position.x, pl.position.z)
+        const dmv = getDuke(seed())
+        let z = layout.findZone(arg || 'duke', seed(), pl.position.x, pl.position.z)
+        if (dmv && z && arg !== 'duke' && arg !== 'yorg' && dmv.voidAt(z.x, z.z)) z = layout.findZone(arg, seed(), pl.position.x, pl.position.z + 1400) // separate level, out of sight of Duke
         if (!z || !TP[arg || 'duke']) return 'No such zone nearby'
         const dm = getDuke(seed())
         if ((arg || 'duke') === 'duke' && dm) {
-          const lv = Math.max(1, Math.min(dm.maps.length, parseInt(arg2) || 1))
-          const st = dm.maps[lv - 1].start
-          bm.teleport(pl, new Vec3(st.x, st.y + 0.2, st.z))
-          return `Teleported to Duke Nukem 3D ${dm.maps[lv - 1].name} start`
+          const ds = bm.dukeStart(parseInt(arg2) || 1)
+          bm.teleport(pl, ds.pos)
+          return `Teleported to Duke Nukem 3D ${ds.name} start`
         }
         const yt = getYorg()
         if (arg === 'yorg' && yt) {

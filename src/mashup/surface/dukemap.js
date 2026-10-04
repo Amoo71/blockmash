@@ -55,8 +55,9 @@ function prepare (m, { ox, oz, G, zref = 8192 }) {
     const w = W[S[si].wallptr]; const w2 = W[w.p2]
     const dx = w2.x - w.x; const dy = w2.y - w.y; const len = Math.hypot(dx, dy)
     if (!len) return base
-    const j = ((bx - w.x) * dy - (by - w.y) * dx) / 8
-    return base + heinum * j / len
+    // Build getzofslope(): z + heinum * dmulscale3(dx, y - wy, -dy, x - wx) / (len << 5)
+    const j = (dx * (by - w.y) - dy * (bx - w.x)) / 8
+    return base + heinum * j / (len * 32)
   }
   const floorZ = (si, bx, by) => slopeZ(si, S[si].fz, S[si].fstat & 2 ? S[si].fheinum : 0, bx, by)
   const ceilZ = (si, bx, by) => slopeZ(si, S[si].cz, S[si].cstat & 2 ? S[si].cheinum : 0, bx, by)

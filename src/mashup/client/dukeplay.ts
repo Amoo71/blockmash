@@ -1,0 +1,147 @@
+// Play the placed Duke3D levels like Duke: Build-style player movement (walls, steps, slopes, ceilings, crouch
+// through vents), doors / lifts / bridges that open on touch (Build sector lotags), and the nuke button that
+// leads to the next level. The MC block layer under the floors stays for mining/explosions: over a hole the
+// controller lets go and vanilla physics takes over (you fall into the Minecraft world below).
+import { inHole } from './surfmat'
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { makePhys } = require('../surface/dukephys')
+
+type Door = { si: number, kind: 'door' | 'lift', c0: number, c1: number, f0: number, f1: number, t: number, target: number, armed: boolean, onFor: number, bb: [number, number, number, number], barriersCleared?: boolean }
+
+export function initDukePlay (dm: any, levels: any[]) {
+  const bot = (globalThis as any).bot; const server = (globalThis as any).localServer
+  // ---------------- moving sectors
+  const doorsOf = new Map<any, Door[]>()
+  const setupDoors = (d: any) => {
+    let list = doorsOf.get(d); if (list) return list
+    list = []
+    const S = d.m.sectors; const W = d.m.walls
+    S.forEach((s: any, si: number) => {
+      const lt = s.lotag
+      const nb = new Set<number>(); for (let i = s.wallptr; i < s.wallptr + s.wallnum; i++) if (W[i].ns >= 0) nb.add(W[i].ns)
+      let a = Infinity; let b = Infinity; let c = -Infinity; let e = -Infinity
+      for (let i = s.wallptr; i < s.wallptr + s.wallnum; i++) { const p = d.toWorld(W[i].x, W[i].y); a = Math.min(a, p.x); c = Math.max(c, p.x); b = Math.min(b, p.z); e = Math.max(e, p.z) }
+      const bb: [number, number, number, number] = [a, b, c, e]
+      if ([20, 21, 22, 23, 25, 26, 27].includes(lt)) {
+        if (s.fz - s.cz > 1.6 * 8192) return // already open (e.g. swinging door panels)
+        // open to the lowest neighbouring ceiling that leaves at least 1.7 blocks of headroom
+        const cs = [...nb].map(n => S[n].cz).filter(z => s.fz - z >= 1.7 * 8192).sort((p, q) => q - p)
+        const c1 = cs[0] ?? Math.min(...[...nb].map(n => S[n].cz), s.fz - 2 * 8192)
+        list!.push({ si, kind: 'door', c0: s.cz, c1, f0: s.fz, f1: s.fz, t: 0, target: 0, armed: true, onFor: 0, bb })
+      } else if (lt >= 16 && lt <= 19) {
+        const up = lt === 17 || lt === 19
+        const fs = [...nb].map(n => S[n].fz).filter(z => Math.abs(z - s.fz) > 1024)
+        const above = fs.filter(z => z < s.fz).sort((p, q) => q - p)[0]; const below = fs.filter(z => z > s.fz).sort((p, q) => p - q)[0]
+        const f1 = (up ? above ?? below : below ?? above)
+        if (f1 == null) return
+        const moveC = lt === 18 || lt === 19
+        list!.push({ si, kind: 'lift', c0: s.cz, c1: moveC ? s.cz + (f1 - s.fz) : s.cz, f0: s.fz, f1, t: 0, target: 0, armed: true, onFor: 0, bb })
+      }
+    })
+    doorsOf.set(d, list)
+    return list
+  }
+  const clearBarriers = (d: any, D: Door) => {
+    if (D.barriersCleared || !server?.overworld) return
+    D.barriersCleared = true
+    for (let x = Math.floor(D.bb[0]) - 1; x <= Math.ceil(D.bb[2]); x++) {
+      for (let z = Math.floor(D.bb[1]) - 1; z <= Math.ceil(D.bb[3]); z++) {
+        const c = d.col(x + 0.5, z + 0.5); if (!c || c.sect !== D.si || c.bar1 <= c.bar0) continue
+        for (let y = c.bar0; y < c.bar1; y++) server.setBlock(server.overworld, new (bot.entity.position.constructor)(x, y, z), 0)
+      }
+    }
+  }
+  const animate = (d: any, dt: number, p: any, sect: number, onGround: boolean) => {
+    const list = setupDoors(d); const S = d.m.sectors
+    const L = levels.find(l => l.sub === d)
+    for (const D of list) {
+      const dx = Math.max(D.bb[0] - p.x, 0, p.x - D.bb[2]); const dz = Math.max(D.bb[1] - p.z, 0, p.z - D.bb[3])
+      const near = Math.hypot(dx, dz) < 1.6
+      if (D.kind === 'door') {
+        if (near && D.target === 0) { D.target = 1; clearBarriers(d, D) }
+      } else {
+        const on = sect === D.si && onGround
+        D.onFor = on ? D.onFor + dt : 0
+        if (!on) D.armed = true
+        if (on && D.armed && D.onFor > 0.4 && D.t === D.target) { D.target = 1 - D.target; D.armed = false }
+      }
+      if (D.t !== D.target) {
+        const span = Math.max(Math.abs(D.c1 - D.c0), Math.abs(D.f1 - D.f0)) / 8192 || 1
+        const k = dt * (D.kind === 'door' ? 5 : 3) / span
+        D.t = D.target > D.t ? Math.min(D.target, D.t + k) : Math.max(D.target, D.t - k)
+        S[D.si].cz = Math.round(D.c0 + (D.c1 - D.c0) * D.t); S[D.si].fz = Math.round(D.f0 + (D.f1 - D.f0) * D.t)
+        L?.updateDyn?.(D.si)
+      }
+    }
+  }
+  const sound = (name: string, at: any) => { try { server?.emit('blockmashDuke', { type: 'sound', sound: name, at }) } catch {} }
+
+  // ---------------- exits: the nuke button of each level
+  const exits = new Map<any, Array<{ x: number, z: number, y: number }>>()
+  const exitsOf = (d: any) => {
+    let l = exits.get(d); if (l) return l
+    l = d.m.sprites.filter((sp: any) => sp.pic === 142 && Math.abs(sp.x) < 1e6).map((sp: any) => { const w = d.toWorld(sp.x, sp.y); return { x: w.x, z: w.z, y: d.zToY(sp.z) } })
+    exits.set(d, l!); return l!
+  }
+  let exitCooldown = 0
+
+  // ---------------- player controller
+  let act = false; let last: any = null
+  const st = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, on: false }
+  let lastT = performance.now()
+  ;(globalThis as any).blockmashDukePlay = () => ({ act, st: { ...st }, doors: [...doorsOf.values()].flat().map(D => ({ si: D.si, kind: D.kind, t: D.t })) })
+  bot.on('physicsTick', () => {
+    const now = performance.now(); const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now
+    const e = bot.entity; if (!e) return
+    const off = () => { act = false; (globalThis as any).blockmashDukeAct = false }
+    if (bot.game?.gameMode === 'spectator' || (globalThis as any).blockmashYorg?.drive || (bot.game?.gameMode === 'creative' && bot.physics?.gravity === 0)) return off()
+    // teleported / respawned since our last tick -> start again from the real position
+    if (act && last && Math.hypot(e.position.x - last.x, e.position.y - last.y, e.position.z - last.z) > 2.5) act = false
+    const src = act ? st : e.position
+    const d = dm.mapAt(src.x, src.z); if (!d) return off()
+    const P = makePhys(d)
+    if (!act) {
+      const g = P.ground(e.position.x, e.position.z, e.position.y, 0.3, 0.6)
+      if (!g || e.position.y < g.floor - 0.6 || (e.position.y < g.floor + 0.3 && inHole(e.position.x, g.floor, e.position.z, 0.25))) return off()
+      Object.assign(st, { x: e.position.x, y: Math.max(e.position.y, g.floor), z: e.position.z, vx: 0, vy: Math.max(0, e.velocity.y), vz: 0, on: false })
+      act = true
+    }
+    ;(globalThis as any).blockmashDukeAct = true
+    const c = bot.controlState
+    const f = (c.forward ? 1 : 0) - (c.back ? 1 : 0); const s = (c.right ? 1 : 0) - (c.left ? 1 : 0)
+    const crouch = !!c.sneak; const h = crouch ? 0.9 : 1.5
+    const speed = crouch ? 0.1 : c.sprint ? 0.34 : 0.25
+    const yaw = Math.PI - e.yaw; const sn = Math.sin(yaw); const cs = Math.cos(yaw)
+    let wx = -(s * cs + f * sn); let wz = f * cs - s * sn
+    const wl = Math.hypot(wx, wz); if (wl > 0) { wx = wx / wl * speed; wz = wz / wl * speed }
+    const acc = st.on ? 0.55 : 0.12
+    st.vx += (wx - st.vx) * acc; st.vz += (wz - st.vz) * acc
+    if (c.jump && st.on) { st.vy = 0.45; st.on = false }
+    st.vy = (st.vy - 0.08) * 0.98
+    const r = P.slide(st.x, st.z, st.y, st.vx, st.vz, 0.3, h, 0.6)
+    st.x = r.x; st.z = r.z
+    const g = P.ground(st.x, st.z, st.y, 0.3, 0.6)
+    st.y += st.vy
+    if (g) {
+      const hole = inHole(st.x, g.floor, st.z, 0.25)
+      if (!hole && st.y <= g.floor) { st.y = g.floor; st.vy = 0; st.on = true } else st.on = false
+      if (st.y + h > g.ceil && g.ceil - h >= g.floor - 0.01) { st.y = Math.min(st.y, g.ceil - h); if (st.vy > 0) st.vy = 0 }
+      animate(d, dt, st, g.sect, st.on)
+      // nuke button -> next level
+      if (now > exitCooldown) {
+        for (const x of exitsOf(d)) {
+          if (Math.hypot(x.x - st.x, x.z - st.z) < 1.4 && Math.abs(x.y - (st.y + 1)) < 2.5) {
+            exitCooldown = now + 5000
+            const i = dm.maps.indexOf(d)
+            const next = i + 2 > dm.maps.length ? 1 : i + 2
+            sound('groovy02', st)
+            bot.chat(`/mashup tp duke ${next}`)
+            break
+          }
+        }
+      }
+    }
+    e.position.set(st.x, st.y, st.z); e.velocity.set(st.vx, st.vy, st.vz); e.onGround = st.on
+    last = { x: st.x, y: st.y, z: st.z }
+  })
+}

@@ -6,8 +6,9 @@ const layout = require('../layout')
 const { prepare } = require('./dukemap')
 
 const ORDER = ['E1L1', 'E1L2', 'E1L3', 'E1L4', 'E1L5', 'E1L6']
-const X0 = 230; const ZC = 96; const GAP = 24
+const X0 = 230; const ZC = 96; const GAP = 420 // levels far apart: from inside one level the others are out of sight
 let cache = null
+const VOIDR = 200
 
 // most common walkable floor height (area-weighted) -> placed at the zone ground level
 function mainFloor (m) {
@@ -49,7 +50,14 @@ function getDuke () {
     start: maps[0].start,
     mapAt: at,
     col: (x, z) => { const d = at(x, z); return d ? d.col(x, z) : null },
-    floorAt: (x, z) => { const d = at(x, z); return d ? d.floorAt(x, z) : null }
+    floorAt: (x, z) => { const d = at(x, z); return d ? d.floorAt(x, z) : null },
+    // Duke mode: everything around the levels is void (Duke sky); Minecraft exists only under the Duke floors
+    voidAt: (x, z) => {
+      const d = at(x, z)
+      if (d) { const c = d.col(x, z); return !c || c.kind === 0 }
+      for (const m of maps) { const b = m.bbox; if (x > b.x0 - VOIDR && x < b.x1 + VOIDR && z > b.z0 - VOIDR && z < b.z1 + VOIDR) return true }
+      return false
+    }
   }
   globalThis.blockmashDuke = cache
   return cache

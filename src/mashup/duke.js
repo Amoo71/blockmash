@@ -335,19 +335,30 @@ module.exports = function installDuke (serv, bm) {
 
   serv.commands.add({
     base: 'duke',
-    info: 'Duke kit: /duke give | /duke spawn <trooper|pigcop|octabrain|battlelord>',
-    usage: '/duke give|spawn <kind>',
+    info: 'Duke: /duke (E1L1 start + weapons) | /duke give | /duke spawn <trooper|pigcop|octabrain|battlelord>',
+    usage: '/duke [give|spawn <kind>]',
     onlyPlayer: true,
     parse: (s) => s.trim().split(/\s+/),
     action ([sub, kind], ctx) {
       const pl = ctx.player
-      if (sub === 'give') {
+      const giveKit = () => {
         const s = state(pl)
-        const give = (n, c) => { const slot = pl.inventory.firstEmptyInventorySlot(); if (slot) pl.inventory.updateSlot(slot, new Item(itemId(n), c)) }
+        const has = (n) => pl.inventory.slots.some(it => it && it.name === n)
+        const give = (n, c) => { if (has(n)) return; const slot = pl.inventory.firstEmptyInventorySlot(); if (slot) pl.inventory.updateSlot(slot, new Item(itemId(n), c)) }
         for (const n of ['iron_horse_armor', 'golden_horse_armor', 'diamond_horse_armor', 'leather_horse_armor']) give(n, 1)
         give('firework_star', 16)
         s.ammo = { pistol: 200, shotgun: 50, chaingun: 400, rpg: 20 }
         hud(pl)
+      }
+      if (!sub) {
+        const ds = bm.dukeStart?.(1)
+        giveKit()
+        if (!ds) return 'No Duke3D data loaded (menu: "Duke3D data…") – weapons given anyway'
+        bm.teleport(pl, ds.pos)
+        return `Duke Nukem 3D ${ds.name} – come get some!`
+      }
+      if (sub === 'give') {
+        giveKit()
         return 'Come get some!'
       }
       if (sub === 'spawn') {
@@ -356,7 +367,7 @@ module.exports = function installDuke (serv, bm) {
         duke.spawnEnemy(ENEMIES[kind] ? kind : 'trooper', pl.position.plus(d.scaled(8)).offset(0, 0.5, 0))
         return 'spawned ' + (kind || 'trooper')
       }
-      return 'usage: /duke give | /duke spawn <kind>'
+      return 'usage: /duke | /duke give | /duke spawn <kind>'
     }
   })
   return duke

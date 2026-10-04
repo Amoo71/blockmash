@@ -8,6 +8,7 @@ import { Vec3 } from 'vec3'
 import { addHoleUniform, dayUniform, farUniform, inHole } from './surfmat'
 import { buildDukeMap, VoxSource, DukeLight } from './dukemap'
 import { getDukeManifest } from './dukedata'
+import { initDukePlay } from './dukeplay'
 import { triBoxOverlap } from '../surface/voxelize'
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { getDuke } = require('../surface/dukeworld')
@@ -36,7 +37,7 @@ export async function initSurface () {
   if (!man) return
 
   // ---------------- Duke levels, built lazily when near, dropped when far (GPU memory on mobile)
-  type Lvl = { sub: any, group?: THREE.Group, sources?: VoxSource[], building?: boolean, lights?: DukeLight[], sky?: number }
+  type Lvl = { sub: any, updateDyn?: (si: number) => void, group?: THREE.Group, sources?: VoxSource[], building?: boolean, lights?: DukeLight[], sky?: number }
   const levels: Lvl[] = dm.maps.map((sub: any) => ({ sub }))
   ;(globalThis as any).blockmashDukeLevels = levels
   const NEAR = mobile ? 140 : 220
@@ -46,11 +47,11 @@ export async function initSurface () {
       const d = distTo(L.sub.bbox, p)
       if (d < NEAR && !L.group && !L.building) {
         L.building = true
-        void buildDukeMap(L.sub, './duke', man.tiles).then(r => { r.group.name = 'duke-' + L.sub.name; L.group = r.group; L.sources = r.sources; L.lights = r.lights; L.sky = r.sky; root.add(r.group); L.building = false }).catch(e => { console.warn('[blockmash] Duke level failed', L.sub.name, e); L.building = false })
+        void buildDukeMap(L.sub, './duke', man.tiles).then(r => { r.group.name = 'duke-' + L.sub.name; L.group = r.group; L.sources = r.sources; L.lights = r.lights; L.sky = r.sky; L.updateDyn = r.updateDyn; root.add(r.group); L.building = false }).catch(e => { console.warn('[blockmash] Duke level failed', L.sub.name, e); L.building = false })
       } else if (d > NEAR + 80 && L.group) {
         root.remove(L.group)
         L.group.traverse((o: any) => { o.geometry?.dispose(); o.material?.uniforms?.map?.value?.dispose?.(); o.material?.dispose?.() })
-        L.group = undefined; L.sources = undefined
+        L.group = undefined; L.sources = undefined; L.updateDyn = undefined
       }
     }
   }
@@ -113,11 +114,17 @@ export async function initSurface () {
     return f.y
   }
   ;(globalThis as any).blockmashGroundY = groundY
+  initDukePlay(dm, levels)
   bot.on('physicsTick', () => {
-    const e = bot.entity; if (!e || bot.game?.gameMode === 'spectator' || (globalThis as any).blockmashYorg?.drive) return
+    const e = bot.entity; if (!e || bot.game?.gameMode === 'spectator' || (globalThis as any).blockmashYorg?.drive || (globalThis as any).blockmashDukeAct) return
     const g = groundY(e.position.x, e.position.z)
     if (g == null) return
     if (e.position.y < g && e.position.y > g - 1.2 && e.velocity.y <= 0.05) { e.position.y = g; e.velocity.y = 0; e.onGround = true }
+  })
+  // mobs on the Duke floors: lift the render target (not the tweened position) onto the floor
+  ;((globalThis as any).blockmashEntityYHooks ??= []).push((x: number, y: number, z: number) => {
+    const g = groundY(x, z)
+    return g != null && y < g && y > g - 1.2 ? g : null
   })
   const liftMobs = () => {
     const ents = viewer.entities?.entities; if (!ents) return
@@ -127,8 +134,6 @@ export async function initSurface () {
       // hide level actors standing on level geometry that is not shown yet (beyond loaded chunks)
       const far = farUniform.value; const inLvl = !!dm.mapAt(en.position.x, en.position.z)
       o.visible = !inLvl || Math.hypot(en.position.x - far.x, en.position.z - far.y) < far.z
-      const g = groundY(en.position.x, en.position.z)
-      if (g != null && en.position.y < g && en.position.y > g - 1.2) o.position.y = Math.max(o.position.y, g)
     }
   }
 
@@ -149,7 +154,7 @@ export async function initSurface () {
     const p = bot.entity?.position; if (!p) return
     const t = bot.time?.timeOfDay ?? 6000
     const s = Math.cos(((t - 6000) / 24000) * Math.PI * 2)
-    dayUniform.value = Math.max(0.18, Math.min(1, 0.55 + s * 0.9))
+    dayUniform.value = Math.max(dm.mapAt(p.x, p.z) ? 0.85 : 0.18, Math.min(1, 0.55 + s * 0.9)) // Duke levels keep their own (Build shade) lighting
     const now = performance.now()
     if (now - lastFar > 500) { lastFar = now; updateFar(p) } else { farUniform.value.x = p.x; farUniform.value.y = p.z }
     if (now - lastLv > 1500) { lastLv = now; updateLevels(p) }

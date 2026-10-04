@@ -219,6 +219,10 @@ export function initAtmosphere () {
     // the MC sky colour (dayCycle/water.ts assign a new Color object whenever it changes) is our base
     if (scene.background !== ownBg) { if (scene.background instanceof THREE.Color) baseBg.copy(scene.background); scene.background = ownBg }
     const fc = new THREE.Color().copy(baseBg)
+    // Duke mode: the Duke sky is the sky (dark LA night above the skyline), not the MC day sky
+    const dmb = (globalThis as any).blockmashDuke?.bbox
+    const dukeK = dmb ? Math.max(0, Math.min(1, 1 - Math.hypot(Math.max(dmb.x0 - p.x, 0, p.x - dmb.x1), Math.max(dmb.z0 - p.z, 0, p.z - dmb.z1)) / 200)) : 0
+    if (dukeK > 0) fc.lerp(new THREE.Color(0.035, 0.04, 0.075), dukeK)
     fc.lerp(new THREE.Color(0.03, 0.035, 0.06), env.dark * 0.85)
     fc.lerp(new THREE.Color(0, 0, 0), env.cave)
     ownBg.copy(fc)
@@ -296,7 +300,7 @@ export function initAtmosphere () {
       const cp = new THREE.Vector3(); cam.getWorldPosition(cp)
       const H = (skyMesh as any).H ?? 200
       skyMesh.position.set(cp.x, cp.y + H * 0.5 - H * 0.2, cp.z); skyMesh.updateMatrixWorld()
-      skyMat.uniforms.uFade.value = fade; skyMat.uniforms.uNight.value = Math.min(1, night * 1.1 + env.dark * 0.6); skyMat.uniforms.uSky.value.copy(fc)
+      skyMat.uniforms.uFade.value = fade; skyMat.uniforms.uNight.value = Math.max(dukeK, Math.min(1, night * 1.1 + env.dark * 0.6)); skyMat.uniforms.uSky.value.copy(fc)
     }
     void dayUniform
   }

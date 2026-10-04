@@ -27,5 +27,5 @@ def read_map(data):
     for _ in range(nsp):
         v = SPRITE.unpack_from(data, o); o += SPRITE.size
         sprites.append(dict(x=v[0], y=v[1], z=v[2], cstat=v[3], pic=v[4], shade=v[5], pal=v[6], clip=v[7], xr=v[9], yr=v[10],
-                            xo=v[11], yo=v[12], sect=v[13], stat=v[14], ang=v[15], lotag=v[21], hitag=v[22]))
+                            xo=v[11], yo=v[12], sect=v[13], stat=v[14], ang=v[15], lotag=v[20], hitag=v[21]))
     return dict(version=ver, start=dict(x=px, y=py, z=pz, ang=ang, sect=cursect), sectors=sectors, walls=walls, sprites=sprites)

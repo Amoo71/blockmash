@@ -262,15 +262,35 @@ export function initDukeButton () {
     btn.title = have ? 'Duke Nukem 3D shareware data is stored in this browser. Tap to replace; long-press/right-click to remove.' : 'Pick your Duke Nukem 3D shareware 3dduke13.zip (or DUKE3D.GRP). It is read locally and never uploaded.'
   }
   refresh()
-  input.onchange = async () => {
-    const f = input.files?.[0]; if (!f) return
+  const onPick = async (inp: HTMLInputElement) => {
+    const f = inp.files?.[0]; if (!f) return
     bar.style.opacity = '1'
     try {
       const r = await importDuke(f, m => { msg.textContent = 'Duke3D: ' + m })
       msg.textContent = `Duke3D: ${r.tiles} tiles, ${r.sounds} sounds stored – restarting…`
       setTimeout(() => location.reload(), 900)
     } catch (e: any) { msg.textContent = 'Duke3D: ' + (e?.message ?? e); console.warn('[blockmash] Duke import failed', e) }
-    input.value = ''
+    inp.value = ''
+  }
+  input.onchange = () => onPick(input)
+  // no Duke data at all: BlockMash *is* Duke Nukem 3D -> a clear prompt instead of a plain Minecraft world
+  const prompt = () => {
+    if (document.getElementById('bm-duke-prompt') || sessionStorage.getItem('bm-noduke')) return
+    const ov = document.createElement('div'); ov.id = 'bm-duke-prompt'
+    ov.style.cssText = 'position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.78);font:14px sans-serif;color:#ddd;text-align:center;padding:16px'
+    ov.innerHTML = `<div style="max-width:420px;background:#14100c;border:2px solid #b8860b;border-radius:8px;padding:20px 18px">
+      <div style="font:bold 22px sans-serif;color:#ffcc33;margin-bottom:10px">Load Duke Nukem 3D</div>
+      <div style="line-height:1.45;margin-bottom:16px">BlockMash plays the real Duke Nukem 3D shareware levels (E1L1–E1L6) – Minecraft is only underneath, where you blow holes into them.<br><br>Pick <b>3dduke13.zip</b> (or <b>DUKE3D.GRP</b>) from your device. It is unpacked in your browser, stored locally and never uploaded.</div>
+      <label id="bm-duke-prompt-btn" style="display:inline-block;padding:12px 20px;background:#b8860b;color:#000;font:bold 16px sans-serif;border-radius:6px;cursor:pointer">Choose 3dduke13.zip…</label>
+      <div id="bm-duke-prompt-msg" style="min-height:18px;margin-top:12px;color:#ffcc33"></div>
+      <a href="#" id="bm-duke-prompt-skip" style="display:inline-block;margin-top:10px;color:#777;font-size:12px">continue without Duke (plain Minecraft)</a></div>`
+    document.body.append(ov)
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = input.accept; inp.style.cssText = input.style.cssText
+    ov.querySelector('#bm-duke-prompt-btn')!.append(inp)
+    const pm = ov.querySelector('#bm-duke-prompt-msg') as HTMLElement
+    new MutationObserver(() => { pm.textContent = msg.textContent }).observe(msg, { childList: true, characterData: true, subtree: true })
+    inp.onchange = () => onPick(inp)
+    ;(ov.querySelector('#bm-duke-prompt-skip') as HTMLElement).onclick = (e) => { e.preventDefault(); sessionStorage.setItem('bm-noduke', '1'); ov.remove() }
   }
   btn.oncontextmenu = (e) => {
     if (!dukeImported()) return
@@ -283,5 +303,5 @@ export function initDukeButton () {
     bar.style.display = playing && !msg.textContent ? 'none' : 'flex'
   }, 500)
   ;(globalThis as any).blockmashDukeImport = importDuke
-  void loadDukeCache().then(refresh)
+  void loadDukeCache().then(async () => { refresh(); if (!dukeImported() && !(await getDukeManifest())) prompt() })
 }

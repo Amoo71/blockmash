@@ -410,6 +410,7 @@ async function connect (connectOptions: ConnectOptions) {
       setLoadingScreenStatus('Starting local server')
       // BlockMash: locally extracted Duke3D E1L1 map for the polygon surface (never shipped; blocky fallback without it)
       if (!globalThis.blockmashDukeMaps && await getDukeManifest()) {
+        globalThis.blockmashDukeTiles = (await getDukeManifest())?.tiles // sprite sizes for the Build collision
         const maps = {}
         await Promise.all(['E1L1', 'E1L2', 'E1L3', 'E1L4', 'E1L5', 'E1L6'].map(async n => {
           try { const r = await fetch(dukeUrl(`./duke/maps/${n}.json`)); if (r.ok) maps[n] = await r.json() } catch {}

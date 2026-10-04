@@ -95,6 +95,13 @@ export async function initYorgTrack () {
     const p = o.position; const s = yt.surf(p.x, p.z)
     if (s && s.kind !== 3 && p.y === Math.floor(s.y - 0.35) - 1 && !inHole(p.x + 0.5, s.y, p.z + 0.5)) server.blockmash.addHole(p.x + 0.5, s.y + 0.3, p.z + 0.5, 0.95)
   })
+  // mobs on the track: lift the render target onto the track surface
+  ;((globalThis as any).blockmashEntityYHooks ??= []).push((x: number, y: number, z: number) => {
+    if (!built) return null
+    const s = yt.surf(x, z)
+    if (!s || s.kind === 3 || inHole(x, s.y, z, 0.25)) return null
+    return y < s.y && y > s.y - 1.6 ? s.y : null
+  })
   // walk on the track surface (the block layer is up to ~1.3 below it)
   bot.on('physicsTick', () => {
     const e = bot.entity; if (!e || !built || bot.game?.gameMode === 'spectator' || (globalThis as any).blockmashYorg?.drive) return

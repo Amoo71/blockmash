@@ -15,6 +15,12 @@ import mojangson from 'mojangson'
 import externalTexturesJson from './entity/externalTextures.json'
 import { disposeObject } from './threeJsUtils'
 
+// visual ground offset hooks (mesh surfaces above the block layer), applied to the tween target so it never fights the tween
+const entityY = (pos) => {
+  let y = pos.y
+  for (const f of globalThis.blockmashEntityYHooks ?? []) { const r = f(pos.x, pos.y, pos.z); if (r != null && r > y) y = r }
+  return y
+}
 export const TWEEN_DURATION = 50 // todo should be 100
 
 function getUsernameTexture(username, { fontFamily = 'sans-serif' }) {
@@ -378,7 +384,7 @@ export class Entities extends EventEmitter {
       if (!mesh) return
       mesh.name = 'mesh'
       // set initial position so there are no weird jumps update after
-      group.position.set(entity.pos.x, entity.pos.y, entity.pos.z)
+      group.position.set(entity.pos.x, entityY(entity.pos), entity.pos.z)
 
       // todo use width and height instead
       const boxHelper = new THREE.BoxHelper(mesh,
@@ -471,7 +477,7 @@ export class Entities extends EventEmitter {
     }
 
     if (entity.pos) {
-      new TWEEN.Tween(e.position).to({ x: entity.pos.x, y: entity.pos.y, z: entity.pos.z }, TWEEN_DURATION).start()
+      new TWEEN.Tween(e.position).to({ x: entity.pos.x, y: entityY(entity.pos), z: entity.pos.z }, TWEEN_DURATION).start()
     }
     if (entity.yaw) {
       const da = (entity.yaw - e.rotation.y) % (Math.PI * 2)

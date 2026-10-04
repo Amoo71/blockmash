@@ -5,6 +5,8 @@ import { GeoBuilder, surfaceMaterial } from './surfmat'
 import { dukeUrl } from './dukedata'
 
 const SKIP_SPRITE = (p: number) => p <= 10 || (p >= 21 && p <= 60) || p === 100 || (p >= 1680 && p < 1760) || (p >= 1820 && p <= 1830) || (p >= 2000 && p <= 2050) || (p >= 2630 && p <= 2700) || p === 1405 || p === 2271
+// Build sector lotags that move: 16-19 platforms/elevators, 20-23/25/26 doors, 27 stretch bridges
+export const DYN_LOTAGS = new Set([16, 17, 18, 19, 20, 21, 22, 23, 25, 26, 27])
 export type VoxSource = { pos: number[], idx: number[], tc: number[] }
 
 export type DukeLight = { x: number, y: number, z: number, r: number, c: [number, number, number] }
@@ -44,7 +46,11 @@ export async function buildDukeMap (dm: any, base: string, tiles: Record<string,
   const tinfo = (p: number) => { const pl = place.get(p); const t = tiles[p]; return pl ? [pl[0], pl[1], t.w, t.h] : null }
   const avg = (p: number): [number, number, number] => (tiles[p]?.avg as any) ?? [120, 120, 120]
 
-  const solid = new GeoBuilder(true); const masked = new GeoBuilder(true)
+  let solid = new GeoBuilder(true); let masked = new GeoBuilder(true)
+  // moving sectors (doors, lifts, bridges): drawn as separate small meshes that are rebuilt while they move
+  const DYN = new Set<number>(); S.forEach((s: any, si: number) => { if (DYN_LOTAGS.has(s.lotag)) DYN.add(si) })
+  const intoDyn = new Map<number, Array<[number, number]>>() // dyn sector -> walls of other sectors facing it
+  let noLights = false
   const fz = (si: number, bx: number, by: number) => dm.floorZ(si, bx, by)
   const cz = (si: number, bx: number, by: number) => dm.ceilZ(si, bx, by)
   // ---- walls
@@ -85,17 +91,19 @@ export async function buildDukeMap (dm: any, base: string, tiles: Record<string,
     lights.push({ x, y, z, r: 5 + Math.min(7, Math.max(-shade, 0) / 4), c: [a[0] / mx * k, a[1] / mx * k, a[2] / mx * k] })
   }
   const setEnv = (g: GeoBuilder, s: any) => { g.outdoor = s.cstat & 1 ? 1 : 0; g.vis = (s.vis ?? 0) / 255 }
-  S.forEach((s: any, si: number) => {
+  const emitWall = (si: number, i: number) => {
+    const s = S[si]
     curSect = si
     setEnv(solid, s); setEnv(masked, s)
-    for (let i = s.wallptr; i < s.wallptr + s.wallnum; i++) {
+    {
       const w = W[i]; const w2 = W[w.p2]
       const fa = fz(si, w.x, w.y); const fb = fz(si, w2.x, w2.y); const ca = cz(si, w.x, w.y); const cb = cz(si, w2.x, w2.y)
-      if (w.ns < 0 || w.cstat & 16) {
+      if (!noLights && (w.ns < 0 || w.cstat & 16)) {
         const zm = Math.max((fa + fb) / 2 - 6 * 8192, (fa + ca) / 2)
         const nx = -(w2.y - w.y); const ny = w2.x - w.x; const l = Math.hypot(nx, ny) || 1
         lightOf(w.cstat & 16 ? w.opic : w.pic, w.shade, X((w.x + w2.x) / 2 + nx / l * 300), Y(zm), Z((w.y + w2.y) / 2 + ny / l * 300))
       }
+      if (w.ns < 0 && s.__open && DYN_LOTAGS.has(s.lotag)) return // open swinging/sliding door: the panels are gone
       if (w.ns < 0) {
         // walls under a parallax sky: Build draws them up to the (very high) sky ceiling; cap them at ~12 blocks
         const cap = s.cstat & 1 ? Math.min(fa, fb) - 12 * 8192 : -Infinity
@@ -110,7 +118,7 @@ export async function buildDukeMap (dm: any, base: string, tiles: Record<string,
           wallQuad(solid, w, w2, Math.max(ca, cap), Math.max(cb, cap), deep, deep, w.pic, s.cz, w.shade, true)
           solid.outdoor = so; curSect = save
         }
-        continue
+        return
       }
       const n = S[w.ns]; const ni = w.ns
       const nfa = fz(ni, w.x, w.y); const nfb = fz(ni, w2.x, w2.y); const nca = cz(ni, w.x, w.y); const ncb = cz(ni, w2.x, w2.y)
@@ -123,9 +131,18 @@ export async function buildDukeMap (dm: any, base: string, tiles: Record<string,
       if ((nca > ca || ncb > cb) && !((s.cstat & 1) && (n.cstat & 1))) wallQuad(solid, w, w2, ca, cb, nca, ncb, w.pic, w.cstat & 4 ? s.cz : n.cz, w.shade)
       if (w.cstat & 16) wallQuad(masked, w, w2, Math.max(ca, nca), Math.max(cb, ncb), Math.min(fa, nfa), Math.min(fb, nfb), w.opic, w.cstat & 4 ? Math.min(s.fz, n.fz) : Math.max(s.cz, n.cz), w.shade)
     }
+  }
+  S.forEach((s: any, si: number) => {
+    for (let i = s.wallptr; i < s.wallptr + s.wallnum; i++) {
+      const ns = W[i].ns
+      if (DYN.has(si)) continue
+      if (ns >= 0 && DYN.has(ns)) { let l = intoDyn.get(ns); if (!l) intoDyn.set(ns, l = []); l.push([si, i]); continue }
+      emitWall(si, i)
+    }
   })
   // ---- floors / ceilings
-  S.forEach((s: any, si: number) => {
+  const emitPlanes = (si: number) => {
+    const s = S[si]
     setEnv(solid, s)
     const loops: number[][] = dm.loops[si]
     if (!loops.length) return
@@ -157,7 +174,8 @@ export async function buildDukeMap (dm: any, base: string, tiles: Record<string,
       plane(s.cpic, s.cshade + 2, (x, y) => cz(si, x, y), false)
       solid.outdoor = so
     }
-  })
+  }
+  S.forEach((_s: any, si: number) => { if (!DYN.has(si)) emitPlanes(si) })
   // ---- sprites (decoration only; actors and pickups are live entities)
   for (const sp of m.sprites) {
     if (SKIP_SPRITE(sp.pic) || (sp.cstat & 32768)) continue
@@ -184,9 +202,13 @@ export async function buildDukeMap (dm: any, base: string, tiles: Record<string,
       masked.quad(p, q, r, s)
     } else { quad(1, 0); quad(0, 1) } // face sprite -> static cross billboard (cheap, merged)
   }
+  const mats: Record<string, any> = {}
   const mk = (g: GeoBuilder, alpha: boolean) => {
-    const mat = surfaceMaterial({ map: atlas, atlas: true, side: alpha ? THREE.DoubleSide : THREE.FrontSide, alphaTest: alpha ? 0.5 : undefined })
-    mat.uniforms.uAtlas.value.set(AW, AH)
+    let mat = mats[alpha ? 'm' : 's']
+    if (!mat) {
+      mat = mats[alpha ? 'm' : 's'] = surfaceMaterial({ map: atlas, atlas: true, side: alpha ? THREE.DoubleSide : THREE.FrontSide, alphaTest: alpha ? 0.5 : undefined })
+      mat.uniforms.uAtlas.value.set(AW, AH)
+    }
     const mesh = new THREE.Mesh(g.build(), mat)
     mesh.name = alpha ? 'duke-masked' : 'duke-level'
     mesh.geometry.computeBoundingSphere(); mesh.frustumCulled = true // one mesh per level: off-screen levels are skipped
@@ -200,5 +222,26 @@ export async function buildDukeMap (dm: any, base: string, tiles: Record<string,
   const skyCount = new Map<number, number>()
   for (const s of S) if (s.cstat & 1) skyCount.set(s.cpic, (skyCount.get(s.cpic) ?? 0) + 1)
   const sky = [...skyCount].sort((a, b) => b[1] - a[1])[0]?.[0]
-  return { group, sources, lights, sky }
+  // one moving sector: its walls + planes + the neighbours' walls facing it, at the current sector heights
+  const buildDyn = (si: number) => {
+    const ss = solid; const sm = masked
+    solid = new GeoBuilder(true); masked = new GeoBuilder(true); noLights = true
+    const s = S[si]
+    for (let i = s.wallptr; i < s.wallptr + s.wallnum; i++) emitWall(si, i)
+    for (const [o, i] of intoDyn.get(si) ?? []) emitWall(o, i)
+    emitPlanes(si)
+    const g = new THREE.Group(); g.name = 'duke-dyn-' + si
+    if (solid.idx.length) g.add(mk(solid, false))
+    if (masked.idx.length) g.add(mk(masked, true))
+    solid = ss; masked = sm; noLights = false
+    return g
+  }
+  const dyn = new Map<number, THREE.Group>()
+  const updateDyn = (si: number) => {
+    const old = dyn.get(si)
+    if (old) { group.remove(old); old.traverse((o: any) => o.geometry?.dispose()) }
+    const g = buildDyn(si); dyn.set(si, g); group.add(g)
+  }
+  for (const si of DYN) updateDyn(si)
+  return { group, sources, lights, sky, updateDyn, dynSectors: DYN }
 }
