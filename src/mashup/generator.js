@@ -128,7 +128,7 @@ function generation ({ version, seed = 1 } = {}) {
         // --- surface: zones or vanilla decoration
         const Z = info.inCore && !(info.type === 'duke' && dm) && ZONES[info.type]
         if (inDuke) {
-          col[h] = S('smooth_stone')
+          col[h] = B.dirt // plain soil under the Duke floor polygons (shows in craters)
           if (dcol.bar1 > dcol.bar0) for (let y = dcol.bar0; y < dcol.bar1; y++) put(y, 'barrier')
         } else if (Z) {
           Z.column(info.u, info.v, info.G, put, { seed, rx: info.rx, rz: info.rz })

@@ -73,6 +73,15 @@ export async function buildDukeMap (dm: any, base: string, tiles: Record<string,
         // walls under a parallax sky: Build draws them up to the (very high) sky ceiling; cap them at ~12 blocks
         const cap = s.cstat & 1 ? Math.min(fa, fb) - 12 * 8192 : -Infinity
         wallQuad(solid, w, w2, Math.max(ca, cap), Math.max(cb, cap), fa, fb, w.pic, w.cstat & 4 ? s.fz : s.cz, w.shade)
+        // map boundary: also give the wall a real Duke exterior face down into the ground (hides the block fill)
+        const dx = w2.x - w.x; const dy = w2.y - w.y; const l = Math.hypot(dx, dy) || 1
+        const ox2 = (w.x + w2.x) / 2 + dy / l * 24; const oy2 = (w.y + w2.y) / 2 - dx / l * 24
+        if (dm.sectorAt(ox2, oy2) < 0) {
+          const deep = zref + (G - 40) * 8192
+          const save = curSect; curSect = -2 // facesIn() false -> reversed winding = outward face
+          wallQuad(solid, w, w2, Math.max(ca, cap), Math.max(cb, cap), deep, deep, w.pic, s.cz, w.shade + 4)
+          curSect = save
+        }
         continue
       }
       const n = S[w.ns]; const ni = w.ns

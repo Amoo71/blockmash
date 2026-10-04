@@ -86,6 +86,8 @@ function prepare (m, { ox, oz, G, zref = 8192 }) {
       }
       const cy = zToY(ceilZ(sc, c.bx, c.by))
       top[idx] = Math.floor(fy + 1e-3)
+      // columns on the map boundary: keep the block fill low so it never pokes out through the exterior walls
+      if (wall) { let outside = false; for (const [dx, dz] of [[0, 0], [1, 0], [0, 1], [1, 1]]) { const p = toBuild(x + dx, z + dz); if (sectorAt(p.bx, p.by) < 0) outside = true } if (outside) top[idx] = Math.min(top[idx], G - 3) }
       kind[idx] = 1
       if (cy - zToY(floorZ(sc, c.bx, c.by)) < 1.2) { bar0[idx] = top[idx]; bar1[idx] = top[idx] + 4 } // closed door / crawl space
       else if (wall) { // column touches a solid wall: block it only if most of the cell is outside

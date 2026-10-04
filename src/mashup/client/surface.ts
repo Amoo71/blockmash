@@ -96,7 +96,7 @@ export async function initSurface () {
         }
       }
     }
-    if (cells.size) void server.blockmash.surfaceVoxels([...cells.values()].slice(0, 600))
+    void cells // mesh-to-voxel rim disabled: the hole cuts the level polygons cleanly, MC dirt/stone below
   }
   server.on('blockmashHole', onHole)
   for (const h of server.blockmash.surfaceHoles ?? []) addHoleUniform(h)
