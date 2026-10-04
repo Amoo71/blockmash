@@ -139,7 +139,7 @@ function generation ({ version, seed = 1 } = {}) {
           if (t === 'snowy') col[layout.WATER] = B.ice
         }
         // --- surface: zones or vanilla decoration
-        const Z = info.inCore && !(info.type === 'duke' && dm) && !(info.type === 'yorg' && yt) && ZONES[info.type]
+        const Z = info.inCore && info.type !== 'duke' && !(info.type === 'yorg' && yt) && ZONES[info.type]
         if (ysurf) {
           col[h] = B.dirt // soil under the Yorg road polygons (shows in craters)
           if (ysurf.kind === 3) for (let y = h + 1; y < h + 4; y++) put(y, 'barrier') // track walls / fences
