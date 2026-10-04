@@ -414,6 +414,17 @@ async function connect (connectOptions: ConnectOptions) {
         }))
         if (Object.keys(maps).length) globalThis.blockmashDukeMaps = maps
       }
+      // BlockMash: real Yorg race track (converted at install time; the stadium block fallback is used without it)
+      if (!globalThis.blockmashYorgTrack) {
+        try {
+          const man = await (await fetch('./yorg/manifest.json')).json()
+          const name = man?.tracks?.[0]
+          if (name) {
+            const [meta, ground] = await Promise.all([fetch(`./yorg/tracks/${name}/mesh.json`).then(async r => r.json()), fetch(`./yorg/tracks/${name}/ground.bin`).then(async r => r.arrayBuffer())])
+            globalThis.blockmashYorgTrack = { name, meta, ground }
+          }
+        } catch {}
+      }
       localServer = window.localServer = window.server = startLocalServer(serverOptions)
       // todo need just to call quit if started
       // loadingScreen.maybeRecoverable = false

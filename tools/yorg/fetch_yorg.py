@@ -6,7 +6,7 @@ Yorg code is GPLv3; Ya2's art assets are CC BY-SA (4.0 per itch.io), some sounds
 JSON triangle mesh (Z-up -> Y-up); textures are scaled down. Output: assets/yorg/ (gitignored, fetched at
 install time; safe to skip - the game then falls back to a simple box kart).
 """
-import io, json, os, re, sys, time, urllib.request
+import io, json, os, re, sys, time, urllib.parse, urllib.request
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OUT = os.path.join(ROOT, 'assets', 'yorg')
 CACHE = os.path.join(ROOT, '.cache', 'yorg')
@@ -23,7 +23,7 @@ def get(path):
         return open(cp, 'rb').read()
     for i in range(5):
         try:
-            with urllib.request.urlopen(RAW + path, timeout=60) as r:
+            with urllib.request.urlopen(RAW + urllib.parse.quote(path), timeout=60) as r:
                 data = r.read()
             os.makedirs(os.path.dirname(cp), exist_ok=True)
             open(cp, 'wb').write(data)

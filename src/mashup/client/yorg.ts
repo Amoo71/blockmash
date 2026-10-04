@@ -7,7 +7,9 @@ import * as THREE from 'three'
 import { Vec3 } from 'vec3'
 
 const BASE = './yorg'
-type Track = { cx: number, cz: number, G: number, A: number, R: number, HW: number }
+type Track = { cx: number, cz: number, G: number, A: number, R: number, HW: number, real?: boolean, path?: Array<{ x: number, y: number, z: number }>, cum?: number[], L?: number, starts?: Array<{ x: number, y: number, z: number }> }
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { getYorg } = require('../surface/yorgworld')
 type CarInfo = { maxSpeed?: number, acc?: number, steering?: number[], color?: number[] }
 const DEFAULT_CARS = ['kronos', 'themis', 'diones', 'iapeto', 'iperion', 'phoibe', 'rea', 'teia']
 const DRIVERS = ['Ya2 Bot Alpha', 'Ya2 Bot Bravo', 'Ya2 Bot Charlie']
@@ -83,8 +85,31 @@ export async function initYorg () {
   }
 
   // ---------- track maths (stadium: two straights of half-length A, semicircles of radius R)
-  const trackLen = (t: Track) => 4 * t.A + 2 * Math.PI * t.R
+  const trackLen = (t: Track) => t.real ? t.L! : 4 * t.A + 2 * Math.PI * t.R
+  // real Yorg track: racing line = closed polyline through the track's own waypoints
+  const seg = (t: Track, i: number) => { const P = t.path!; const a = P[i % P.length]; const b = P[(i + 1) % P.length]; return { a, b, len: t.cum![i + 1] - t.cum![i] } }
+  const progressReal = (t: Track, wx: number, wz: number) => {
+    let best = 1e18; let bs = 0
+    for (let i = 0; i < t.path!.length; i++) {
+      const { a, b, len } = seg(t, i); const dx = b.x - a.x; const dz = b.z - a.z
+      const u = Math.max(0, Math.min(1, ((wx - a.x) * dx + (wz - a.z) * dz) / (len * len || 1)))
+      const d = (a.x + dx * u - wx) ** 2 + (a.z + dz * u - wz) ** 2
+      if (d < best) { best = d; bs = t.cum![i] + u * len }
+    }
+    return bs
+  }
+  const alongReal = (t: Track, p: number, lat: number) => {
+    const L = t.L!; p = ((p % L) + L) % L
+    let i = 0; while (i < t.path!.length - 1 && t.cum![i + 1] < p) i++
+    const { a, b, len } = seg(t, i); const u = len ? (p - t.cum![i]) / len : 0
+    const hx = (b.x - a.x) / (len || 1); const hz = (b.z - a.z) / (len || 1)
+    // lateral offset: positive = right of the driving direction
+    const x = a.x + (b.x - a.x) * u - hz * lat; const z = a.z + (b.z - a.z) * u + hx * lat
+    return { x, z, yaw: Math.atan2(-hx, -hz) }
+  }
+  const surfY = (x: number, z: number, fallback: number) => { const s = getYorg()?.surf(x, z); return s ? s.y : fallback }
   const progress = (t: Track, wx: number, wz: number) => {
+    if (t.real) return progressReal(t, wx, wz)
     const x = wx - t.cx; const z = wz - t.cz; const { A, R } = t
     if (Math.abs(x) <= A) return z > 0 ? x : A + Math.PI * R + (A - x)
     if (x > A) return A + (Math.PI / 2 - Math.atan2(z, x - A)) * R
@@ -94,6 +119,7 @@ export async function initYorg () {
   }
   // world position + heading for progress p and lateral offset (positive = outside)
   const along = (t: Track, p: number, lat: number) => {
+    if (t.real) return alongReal(t, p, lat)
     const { A, R } = t; const L = trackLen(t)
     p = ((p + A) % L + L) % L - A
     let x: number, z: number, hx: number, hz: number
@@ -116,6 +142,11 @@ export async function initYorg () {
     return Math.floor(y) + top
   }
   const groundBelow = (x: number, y: number, z: number) => {
+    const ys = getYorg()?.surf(x, z)
+    if (ys && ys.kind !== 3 && ys.y <= y + 0.6 && ys.y > y - 4) {
+      const b = bot.blockAt(new Vec3(Math.floor(x), Math.floor(ys.y - 0.35) - 1, Math.floor(z)))
+      if (b && b.name !== 'air') return ys.y // block layer still there (no crater)
+    }
     for (let yy = Math.floor(y + 0.6); yy >= Math.floor(y) - 4; yy--) { const t = solidTop(x, yy, z); if (t !== null && t <= y + 0.6) return t }
     return null
   }
@@ -163,10 +194,12 @@ export async function initYorg () {
     parked.length = 0; parkedFor = key
     if (!track) return
     CARS.forEach((car, i) => {
-      const x = track!.cx - 8.75 + i * 2.5; const z = track!.cz + 0.5
-      const spot = { car, kart: null as Kart | null, x, y: track!.G + 1, z, yaw: 0 }
+      const st = track!.real ? track!.starts![i % track!.starts!.length] : null
+      const x = st ? st.x : track!.cx - 8.75 + i * 2.5; const z = st ? st.z : track!.cz + 0.5
+      const yaw = st ? along(track!, progress(track!, st.x, st.z), 0).yaw : 0
+      const spot = { car, kart: null as Kart | null, x, y: st ? surfY(x, z, st.y) : track!.G + 1, z, yaw }
       parked.push(spot)
-      void makeKart(car).then(k => { if (parkedFor !== key) return; spot.kart = k; placeKart(k, x, spot.y, z, 0, 0, 0, 0); viewer.scene.add(k.group) })
+      void makeKart(car).then(k => { if (parkedFor !== key) return; spot.kart = k; placeKart(k, x, spot.y, z, yaw, 0, 0, 0); viewer.scene.add(k.group) })
     })
   }
 
@@ -215,7 +248,8 @@ export async function initYorg () {
     const L = trackLen(t)
     const grid = (i: number) => along(t, -4 - i * 4, i % 2 ? -2.5 : 2.5)
     const me = grid(0)
-    await startDrive(CARS[selected], { x: me.x, y: t.G + 1, z: me.z, yaw: me.yaw })
+    if (t.real) for (const p of parked) if (p.kart) p.kart.group.visible = false // the grid is the race now
+    await startDrive(CARS[selected], { x: me.x, y: t.real ? surfY(me.x, me.z, t.G + 1) : t.G + 1, z: me.z, yaw: me.yaw })
     const ai: Ai[] = DRIVERS.map((name, i) => ({ name, car: CARS[(selected + 1 + i * 2) % CARS.length], kart: null, total: -4 - (i + 1) * 4, speed: 0, vmax: vmaxOf(manifest.cars[CARS[(selected + 1 + i * 2) % CARS.length]] ?? {}) * (0.9 + i * 0.035 + Math.random() * 0.04), lat: (i + 1) % 2 ? -2.5 : 2.5, phase: Math.random() * 6 }))
     for (const a of ai) void makeKart(a.car).then(k => { a.kart = k; if (race?.ai.includes(a)) viewer.scene.add(k.group) })
     const now = performance.now()
@@ -227,6 +261,7 @@ export async function initYorg () {
     if (!race) return
     for (const a of race.ai) if (a.kart) viewer.scene.remove(a.kart.group)
     race = null; hud.style.display = 'none'
+    for (const p of parked) if (p.kart) p.kart.group.visible = true
   }
 
   // ---------- events from the integrated server
@@ -280,7 +315,8 @@ export async function initYorg () {
       const locked = !!race && now < race.goAt
       const vmax = vmaxOf(d.info); const acc = accOf(d.info)
       const under = bot.blockAt(new Vec3(Math.floor(d.pos.x), Math.floor(d.pos.y - 0.2), Math.floor(d.pos.z)))
-      const off = under ? OFFROAD.test(under.name) : false
+      const ysf = getYorg()?.surf(d.pos.x, d.pos.z)
+      const off = ysf ? ysf.kind === 2 : under ? OFFROAD.test(under.name) : false
       const cap = off ? vmax * 0.5 : vmax
       const handbrake = c.jump || d.touchBrake
       if (!locked && c.forward) d.speed += (d.speed < 0 ? acc * 2.5 : acc * (1 - Math.max(0, d.speed) / cap * 0.6)) * dt
@@ -376,7 +412,8 @@ export async function initYorg () {
       for (const a of r.ai) {
         if (now > r.goAt && !(a.done && now - a.done > 4000)) {
           const p = ((a.total % L) + L) % L
-          const inCurve = Math.abs(along(t, p, 0).x - t.cx) > t.A
+          let inCurve: boolean
+          if (t.real) { const y0 = along(t, p, 0).yaw; const y1 = along(t, p + 18, 0).yaw; let dy = Math.abs(y1 - y0) % (2 * Math.PI); if (dy > Math.PI) dy = 2 * Math.PI - dy; inCurve = dy > 0.3 } else inCurve = Math.abs(along(t, p, 0).x - t.cx) > t.A
           const target = a.vmax * (inCurve ? 0.93 : 1)
           a.speed += Math.max(-12 * dt, Math.min(8 * dt, target - a.speed))
           a.total += a.speed * dt
@@ -384,7 +421,7 @@ export async function initYorg () {
           if (!a.done && a.total >= r.laps * L) a.done = now
         } else a.speed = Math.max(0, a.speed - 10 * dt)
         const ap = along(t, a.total, a.lat)
-        if (a.kart) placeKart(a.kart, ap.x, t.G + 1, ap.z, ap.yaw, a.speed, 0, dt)
+        if (a.kart) placeKart(a.kart, ap.x, t.real ? surfY(ap.x, ap.z, t.G + 1) : t.G + 1, ap.z, ap.yaw, a.speed, 0, dt)
       }
       if (d) {
         const ranking = [r.total, ...r.ai.map(a => a.total)].sort((x, y) => y - x)

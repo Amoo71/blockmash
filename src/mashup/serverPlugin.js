@@ -6,6 +6,7 @@ const { Vec3 } = require('vec3')
 const layout = require('./layout')
 const makeResolver = require('./blocks')
 const { getDuke } = require('./surface/dukeworld')
+const { getYorg } = require('./surface/yorgworld')
 
 const TP = {
   village: (c) => ({ x: c.x - 96 + 64 + 38, z: c.z - 96 + 64 + 32 }),
@@ -270,6 +271,12 @@ module.exports = function installBlockMash (serv) {
           const st = dm.maps[lv - 1].start
           bm.teleport(pl, new Vec3(st.x, st.y + 0.2, st.z))
           return `Teleported to Duke Nukem 3D ${dm.maps[lv - 1].name} start`
+        }
+        const yt = getYorg()
+        if (arg === 'yorg' && yt) {
+          const st = yt.starts[yt.starts.length - 1] ?? yt.path[0]
+          bm.teleport(pl, new Vec3(st.x - 6, st.y + 0.5, st.z))
+          return `Teleported to the Yorg ${yt.meta.name} track (grid)`
         }
         const p = TP[arg || 'duke'](z)
         const y = await surfaceY(p.x, p.z)

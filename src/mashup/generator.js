@@ -6,6 +6,7 @@ const { Vec3 } = require('vec3')
 const { rnd2, rnd3, hash2, hash3, value3 } = require('./noise')
 const layout = require('./layout')
 const { getDuke } = require('./surface/dukeworld')
+const { getYorg } = require('./surface/yorgworld')
 const makeResolver = require('./blocks')
 const ZONES = {
   village: require('./zones/village'),
@@ -82,6 +83,7 @@ function generation ({ version, seed = 1 } = {}) {
     const chunk = new Chunk()
     const pos = new Vec3(0, 0, 0)
     const dm = getDuke(seed) // real Duke3D shareware levels on the surface (local extraction only)
+    const yt = getYorg() // real Yorg race track (CC BY-SA, fetched at install)
     for (let i = 0; i < 16; i++) {
       for (let k = 0; k < 16; k++) {
         const x = chunkX * 16 + i; const z = chunkZ * 16 + k
@@ -90,6 +92,17 @@ function generation ({ version, seed = 1 } = {}) {
         const inDuke = !!dcol && dcol.kind !== 0
         // block top 1 below the polygon floor (no z-fighting); vanilla underground below
         if (inDuke) info = { ...info, h: dcol.top - 2, biome: 'plains', w: 1, G: dcol.top - 2, inCore: false }
+        // Yorg track: block layer just under the track polygons, terrain blends back to natural around it
+        let ysurf = null
+        if (!inDuke && yt) {
+          const dd = yt.dist(x + 0.5, z + 0.5)
+          if (dd < yt.MARGIN) {
+            ysurf = dd === 0 ? yt.surf(x, z) : null
+            const base = yt.YG - 3
+            const hh = ysurf ? Math.floor(ysurf.y - 0.35) - 1 : Math.round(base + (info.h - base) * Math.max(0, Math.min(1, dd / yt.MARGIN)))
+            info = { ...info, h: hh, biome: 'plains', w: 1, G: hh, inCore: false, type: 'vanilla' }
+          }
+        }
         const { h, biome } = info
         col.fill(AIR)
         const put = (y, spec, force = true) => {
@@ -126,8 +139,11 @@ function generation ({ version, seed = 1 } = {}) {
           if (t === 'snowy') col[layout.WATER] = B.ice
         }
         // --- surface: zones or vanilla decoration
-        const Z = info.inCore && !(info.type === 'duke' && dm) && ZONES[info.type]
-        if (inDuke) {
+        const Z = info.inCore && !(info.type === 'duke' && dm) && !(info.type === 'yorg' && yt) && ZONES[info.type]
+        if (ysurf) {
+          col[h] = B.dirt // soil under the Yorg road polygons (shows in craters)
+          if (ysurf.kind === 3) for (let y = h + 1; y < h + 4; y++) put(y, 'barrier') // track walls / fences
+        } else if (inDuke) {
           col[h] = B.dirt // plain soil under the Duke floor polygons (shows in craters)
           if (dcol.bar1 > dcol.bar0) for (let y = dcol.bar0; y < dcol.bar1; y++) put(y, 'barrier')
         } else if (Z) {

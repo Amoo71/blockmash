@@ -4,6 +4,7 @@ import { initDarkMod } from './darkmod'
 import { initYorg } from './yorg'
 import { initSurface } from './surface'
 import { initAtmosphere } from './atmosphere'
+import { initYorgTrack } from './yorgtrack'
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const ownNames: Record<string, string> = require('../../lang/blockmash-en.json')
 
@@ -30,6 +31,7 @@ const tryStart = () => {
   void initDarkMod()
   void initYorg()
   void initSurface().catch(e => console.warn('[blockmash] surface failed', e))
+  void initYorgTrack().catch(e => console.warn('[blockmash] yorg track failed', e))
   try { initAtmosphere() } catch (e) { console.warn('[blockmash] atmosphere failed', e) }
 }
 setInterval(tryStart, 1000)

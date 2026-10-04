@@ -5,6 +5,7 @@
 'use strict'
 const layout = require('./layout')
 const { A, R, HW } = require('./zones/yorg')
+const { getYorg } = require('./surface/yorgworld')
 
 const CARS = ['kronos', 'themis', 'diones', 'iapeto', 'iperion', 'phoibe', 'rea', 'teia']
 
@@ -14,6 +15,10 @@ module.exports = function installYorg (serv, bm) {
   const emit = (ev) => serv.emit('blockmashYorg', ev)
   const seed = () => serv.overworld.seed | 0
   const trackNear = (pos) => {
+    const yt = getYorg()
+    if (yt) { // the real Yorg track: racing line from its waypoints, grid from its start positions
+      return { real: true, name: yt.meta.name, cx: yt.center.x, cz: yt.center.z, G: yt.YG, HW: 5, path: yt.path, cum: yt.cum, L: yt.L, starts: yt.starts, dist: yt.dist(pos.x, pos.z) }
+    }
     const z = layout.findZone('yorg', seed(), pos.x, pos.z)
     if (!z) return null
     const cx = z.x - 96 + 32 + 63.5; const cz = z.z - 96 + 32 + 63.5

@@ -61,7 +61,7 @@ export const shadowMat = { value: new THREE.Matrix4() }
 export const shadowSize = { value: new THREE.Vector2(1024, 1024) }
 export const sunDir = { value: new THREE.Vector3(0.5, 1, 0.3).normalize() }
 
-type Opts = { map?: THREE.Texture | null, atlas?: boolean, alphaTest?: number, side?: THREE.Side }
+type Opts = { map?: THREE.Texture | null, atlas?: boolean, alphaTest?: number, side?: THREE.Side, detail?: THREE.Texture, detailScale?: [number, number] }
 
 export function surfaceMaterial (o: Opts = {}) {
   const uniforms: Record<string, any> = {
@@ -72,6 +72,7 @@ export function surfaceMaterial (o: Opts = {}) {
   const defs: Record<string, any> = {}
   if (o.atlas) defs.ATLAS = 1
   if (o.alphaTest) defs.ALPHATEST = o.alphaTest
+  if (o.detail) { defs.DETAIL = 1; uniforms.uDetail = { value: o.detail }; uniforms.uRep = { value: new THREE.Vector2(...(o.detailScale ?? [1, 1])) } }
   const m = new THREE.ShaderMaterial({
     uniforms,
     defines: defs,
@@ -86,7 +87,11 @@ export function surfaceMaterial (o: Opts = {}) {
       #endif
       void main () {
         vCol = color; vUv = uv; vEnv = aEnv;
-        vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz;
+        vec4 lp = vec4(position, 1.0);
+        #ifdef USE_INSTANCING
+        lp = instanceMatrix * lp;
+        #endif
+        vec4 w = modelMatrix * lp; vW = w.xyz;
         #ifdef ATLAS
         vTile = aTile;
         #endif
@@ -99,6 +104,9 @@ export function surfaceMaterial (o: Opts = {}) {
       #include <packing>
       #include <logdepthbuf_pars_fragment>
       uniform sampler2D map; uniform vec2 uAtlas; uniform float uDay;
+      #ifdef DETAIL
+      uniform sampler2D uDetail; uniform vec2 uRep;
+      #endif
       uniform vec4 uLP[${MAX_LIGHTS}]; uniform vec3 uLC[${MAX_LIGHTS}]; uniform int uLN;
       uniform vec3 uFogC; uniform vec4 uFogP; uniform vec3 uSky; uniform float uIndoor; uniform float uGlow;
       uniform float uShOn; uniform sampler2D uShMap; uniform mat4 uShMat; uniform vec2 uShSize;
@@ -126,6 +134,9 @@ export function surfaceMaterial (o: Opts = {}) {
         c = texture2D(map, p / uAtlas);
         #else
         c = texture2D(map, vUv);
+        #endif
+        #ifdef DETAIL
+        c.rgb *= texture2D(uDetail, (vUv - 0.5) * uRep + 0.5).rgb * 1.6; // Panda 'modulate' repeat texture
         #endif
         #ifdef ALPHATEST
         if (c.a < float(ALPHATEST)) discard;
