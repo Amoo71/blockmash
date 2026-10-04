@@ -15,7 +15,7 @@ const layout = require('../layout')
 export type Quality = 'low' | 'medium' | 'ultra'
 const PRESET: Record<Quality, { bloom: number, shadow: number, ext: number, mcLights: number, duLights: number, soft: boolean, fog: number }> = {
   low: { bloom: 0, shadow: 0, ext: 0, mcLights: 0, duLights: 4, soft: false, fog: 0.9 },
-  medium: { bloom: 0.5, shadow: 1024, ext: 40, mcLights: 2, duLights: 6, soft: false, fog: 1 },
+  medium: { bloom: 0, shadow: 1024, ext: 40, mcLights: 2, duLights: 6, soft: false, fog: 1 },
   ultra: { bloom: 1, shadow: 4096, ext: 96, mcLights: 4, duLights: MAX_LIGHTS, soft: true, fog: 1.15 }
 }
 const KEY = 'blockmash.gfx'
@@ -75,6 +75,8 @@ export function initAtmosphere () {
   scene.add(sun.target)
   const setupShadows = () => {
     renderer.shadowMap.enabled = P.shadow > 0
+    renderer.shadowMap.autoUpdate = false // re-rendered at most ~6x/s or when the light/player moved (see tick)
+    renderer.shadowMap.needsUpdate = true
     renderer.shadowMap.type = P.soft ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap
     sun.castShadow = P.shadow > 0
     if (P.shadow) {
@@ -181,6 +183,7 @@ export function initAtmosphere () {
   }
   ;(globalThis as any).blockmashSetQuality = setQuality
   ;(globalThis as any).blockmashQuality = () => q
+  ;(globalThis as any).blockmashAtmoTune = (o: Partial<typeof P>) => { P = { ...P, ...o }; setupComposer(); setupShadows(); setupPool(); markShadowCasters() } // debug/perf tests
   addEventListener('keydown', e => { if (e.code === 'F7') { e.preventDefault(); setQuality(q === 'low' ? 'medium' : q === 'medium' ? 'ultra' : 'low') } })
   setQuality(q)
   toast.style.display = 'none'
@@ -194,6 +197,7 @@ export function initAtmosphere () {
     return false
   }
   const ownBg = new THREE.Color(); const baseBg = new THREE.Color(0.68, 0.85, 0.9)
+  let lastShadow = 0; let lastSh = [0, 0, 0, 0]
   const tick = () => {
     requestAnimationFrame(tick)
     const p = bot.entity?.position; if (!p) return
@@ -246,6 +250,9 @@ export function initAtmosphere () {
     sun.target.position.set(cx, p.y, cz); sun.target.updateMatrixWorld()
     sun.position.set(cx + dir.x * 150, p.y + dir.y * 150, cz + dir.z * 150); sun.updateMatrixWorld()
     sun.color.setRGB(lerp(0.55, 1, day), lerp(0.62, 0.97, day), lerp(0.9, 0.9, day))
+    if (P.shadow && (now - lastShadow > 1000 || (now - lastShadow > 160 && (Math.abs(cx - lastSh[0]) + Math.abs(cz - lastSh[1]) + Math.abs(p.y - lastSh[2]) > 0 || Math.abs(sunA - lastSh[3]) > 0.002)))) {
+      lastShadow = now; lastSh = [cx, cz, p.y, sunA]; renderer.shadowMap.needsUpdate = true
+    }
     if (P.shadow && sun.shadow.map) { shadowMap.value = sun.shadow.map.texture; shadowOn.value = env.cave > 0.5 ? 0 : 1 } else shadowOn.value = 0
     if (now - lastCast > 2000) { lastCast = now; markShadowCasters() }
     // lights: dynamic events + Duke level light sources + MC light blocks, nearest/most important first

@@ -53,16 +53,24 @@ export async function buildDukeMap (dm: any, base: string, tiles: Record<string,
     const mx = (w.x + w2.x) / 2 - dy / l * 24; const my = (w.y + w2.y) / 2 + dx / l * 24
     return dm.sectorAt(mx, my) === curSect
   }
-  const wallQuad = (g: GeoBuilder, w: any, w2: any, z1a: number, z1b: number, z0a: number, z0b: number, pic: number, ref: number, sh: number) => {
+  // facing-dependent shade for walls under the open sky (Build has none; without it sunlit facades read as flat slabs)
+  const facing = (w: any, w2: any, out: boolean) => {
+    const dx = w2.x - w.x; const dy = w2.y - w.y; const l = Math.hypot(dx, dy) || 1
+    let nx = dy / l; let nz = -dx / l; if (!out) { nx = -nx; nz = -nz }
+    return 0.86 + 0.14 * (nx * 0.55 + nz * 0.83) // light from the south-east-ish sun side, darker on the far sides
+  }
+  const wallQuad = (g: GeoBuilder, w: any, w2: any, z1a: number, z1b: number, z0a: number, z0b: number, pic: number, ref: number, sh: number, out = false) => {
     // z1 = top (smaller build z), z0 = bottom at both ends
     const t = tinfo(pic); if (!t) return
     if (z0a <= z1a && z0b <= z1b) return
     const tw = t[2]; const th = t[3]
     const uL = w.xr * 8; const pan = w.xp
     const vs = (bz: number) => (bz - ref) * w.yr / 2048 + w.yp * th / 256
-    const c = shadeC(sh); g.cur = avg(pic)
-    const a = g.v(X(w.x), Y(z0a), Z(w.y), pan, vs(z0a), c, t); const b = g.v(X(w2.x), Y(z0b), Z(w2.y), pan + uL, vs(z0b), c, t)
-    const d = g.v(X(w2.x), Y(z1b), Z(w2.y), pan + uL, vs(z1b), c, t); const e = g.v(X(w.x), Y(z1a), Z(w.y), pan, vs(z1a), c, t)
+    const c = shadeC(sh) * (g.outdoor ? facing(w, w2, out) : 1); g.cur = avg(pic)
+    // outside faces: sky-occlusion gradient (darker where they meet the MC ground, lit towards the top)
+    const ao = (bz: number) => out ? Math.max(0.55, Math.min(1.15, 0.55 + (Y(bz) - G) / 14)) : 1
+    const a = g.v(X(w.x), Y(z0a), Z(w.y), pan, vs(z0a), c * ao(z0a), t); const b = g.v(X(w2.x), Y(z0b), Z(w2.y), pan + uL, vs(z0b), c * ao(z0b), t)
+    const d = g.v(X(w2.x), Y(z1b), Z(w2.y), pan + uL, vs(z1b), c * ao(z1b), t); const e = g.v(X(w.x), Y(z1a), Z(w.y), pan, vs(z1a), c * ao(z1a), t)
     if (g !== solid || facesIn(w, w2)) g.quad(a, b, d, e); else g.quad(b, a, e, d)
     void tw
   }
@@ -97,8 +105,9 @@ export async function buildDukeMap (dm: any, base: string, tiles: Record<string,
         if (dm.sectorAt(ox2, oy2) < 0) {
           const deep = zref + (G - 40) * 8192
           const save = curSect; curSect = -2 // facesIn() false -> reversed winding = outward face
-          wallQuad(solid, w, w2, Math.max(ca, cap), Math.max(cb, cap), deep, deep, w.pic, s.cz, w.shade + 4)
-          curSect = save
+          const so = solid.outdoor; solid.outdoor = 1 // the outside of the level is under the MC sky: sun, day/night, shadows
+          wallQuad(solid, w, w2, Math.max(ca, cap), Math.max(cb, cap), deep, deep, w.pic, s.cz, w.shade, true)
+          solid.outdoor = so; curSect = save
         }
         continue
       }
@@ -140,7 +149,13 @@ export async function buildDukeMap (dm: any, base: string, tiles: Record<string,
       }
     }
     plane(s.fpic, s.fshade, (x, y) => fz(si, x, y), false)
-    if (!(s.cstat & 1)) plane(s.cpic, s.cshade, (x, y) => cz(si, x, y), true)
+    if (!(s.cstat & 1)) {
+      plane(s.cpic, s.cshade, (x, y) => cz(si, x, y), true)
+      // roof: the same ceiling seen from above (outside the level, under the MC sky) so buildings are closed volumes
+      const so = solid.outdoor; solid.outdoor = 1
+      plane(s.cpic, s.cshade + 2, (x, y) => cz(si, x, y), false)
+      solid.outdoor = so
+    }
   })
   // ---- sprites (decoration only; actors and pickups are live entities)
   for (const sp of m.sprites) {
@@ -173,7 +188,7 @@ export async function buildDukeMap (dm: any, base: string, tiles: Record<string,
     mat.uniforms.uAtlas.value.set(AW, AH)
     const mesh = new THREE.Mesh(g.build(), mat)
     mesh.name = alpha ? 'duke-masked' : 'duke-level'
-    mesh.frustumCulled = false
+    mesh.geometry.computeBoundingSphere(); mesh.frustumCulled = true // one mesh per level: off-screen levels are skipped
     mesh.castShadow = !alpha
     return mesh
   }
