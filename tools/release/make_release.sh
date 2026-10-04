@@ -7,7 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 export COREPACK_HOME=${COREPACK_HOME:-$HOME/.cache/corepack}
 PNPM="npx -y pnpm@9.15.9"
-VER=${VER:-0.7.0}
+VER=${VER:-0.7.1}
 STAGE=release/stage/BlockMash
 ITEMS=packages/free-mc-assets/minecraft-assets/data/1.14.4/items
 BDC=.cache/purebdcraft/assets/minecraft/textures/item
@@ -41,7 +41,8 @@ mkdir -p "$STAGE/tools" "$STAGE/licenses"
 cp tools/duke3d/dukegrp.py tools/duke3d/extract_duke.py tools/duke3d/buildmap.py "$STAGE/tools/"
 cp LICENSE "$STAGE/licenses/LICENSE-BlockMash-MIT.txt"; cp ASSETS_AUDIT.md "$STAGE/licenses/"
 [ -f dist/darkmod/LICENSE-TheDarkMod.txt ] && cp dist/darkmod/LICENSE-TheDarkMod.txt "$STAGE/licenses/"
-[ -f dist/yorg/LICENSES-Yorg.txt ] && cp dist/yorg/LICENSES-Yorg.txt "$STAGE/licenses/"
+[ -f dist/yorg/LICENSES-Yorg.txt ] && cp dist/yorg/LICENSES-Yorg.txt "$STAGE/licenses/" && printf '\nRace track: www/yorg/tracks/* (track.egg, collision.egg, props, textures of the Yorg track) converted to\nmesh.bin/mesh.json/ground.bin by BlockMash tools/yorg/fetch_track.py (own .egg parser); CC BY-SA, Ya2.\n' >> "$STAGE/licenses/LICENSES-Yorg.txt"
+[ -f "$STAGE/licenses/LICENSE-TheDarkMod.txt" ] && printf '\n\nBlockMash note: www/darkmod/prefabs = The Dark Mod building prefabs (tdm_prefabs01.pk4: house_01-10,\ntower_round_brick, tower_octagonal_blocks) and their textures, converted to polygons by tools/darkmod/fetch_prefabs.py.\nCC BY-NC-SA 3.0, The Dark Mod team - non-commercial use only.\n' >> "$STAGE/licenses/LICENSE-TheDarkMod.txt"
 chmod +x "$STAGE"/start-linux.sh "$STAGE"/start-mac.command "$STAGE"/serve.py "$STAGE"/get-duke-shareware.py
 # shrink a few oversized images for the zip (entity textures stay untouched: their UVs depend on the size)
 python3 - "$STAGE/www" <<'PY'

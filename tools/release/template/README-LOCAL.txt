@@ -2,7 +2,7 @@ BlockMash – local build (v__VER__)
 ==================================
 A browser block game mashup. The SURFACE is real polygon geometry from the mashed games: the six
 Duke Nukem 3D shareware levels E1L1–E1L6 at original scale side by side, plus real Yorg race-track
-and car models and The Dark Mod content. UNDER and between them is the normal blocky world: caves,
+and car models (the Orlando track) and real The Dark Mod building prefabs in the Dark Mod quarter. UNDER and between them is the normal blocky world: caves,
 ores, villages, golems, mobs, crafting. Mining or explosions cut holes into the level geometry and
 reveal the blocks underneath. Based on zardoy/minecraft-web-client (MIT). Not affiliated with
 Mojang/Microsoft, 3D Realms/Gearbox, The Dark Mod team or Ya2.
