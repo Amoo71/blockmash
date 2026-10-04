@@ -96,16 +96,26 @@ export async function initDuke () {
   const attach = (id: number) => {
     const kind = dukeKind(id)
     const group = viewer.entities.entities[id]
-    if (!kind || !group || tracked.has(id)) return
-    for (const c of group.children) c.visible = false
+    if (!kind || !group || tracked.has(id)) return false
     const a = ACTORS[kind]
+    if (!a) return false
+    for (const c of group.children) c.visible = false
     const sprite = makeSprite(manifest, BASE, a.idle, a.px)
     group.add(sprite)
     tracked.set(id, { kind, sprite, last: group.position.clone(), moving: 0 })
+    return true
   }
   viewer.entities.on('add', (e: any) => attach(e.id))
   viewer.entities.on('remove', (e: any) => tracked.delete(e.id))
   for (const id of Object.keys(viewer.entities.entities)) attach(+id)
+  // Entity rendering can fire before server-side BlockMash metadata is registered.
+  // Retry attachment briefly so Duke enemies never remain as invisible zombie entities.
+  const syncActors = () => {
+    for (const id of Object.keys(viewer.entities.entities)) {
+      if (!tracked.has(+id)) attach(+id)
+    }
+  }
+  const actorSyncTimer = setInterval(syncActors, 200)
   bot.on('entityDead', (e: any) => { const t = tracked.get(e.id); if (t) t.dead = performance.now() })
   bot.on('entityHurt', (e: any) => { const t = tracked.get(e.id); if (t) t.hurt = performance.now() })
 
@@ -214,4 +224,7 @@ export async function initDuke () {
   }
   loop()
   console.log('[blockmash] Duke3D shareware content active')
+  // Keep the retry timer alive for the lifetime of the client; removed entities are
+  // naturally ignored because their viewer group no longer exists.
+  void actorSyncTimer
 }
