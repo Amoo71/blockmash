@@ -170,7 +170,7 @@ function makePhys (d) {
       ceil = Math.min(ceil, ce(si, x + ax, z + az))
     }
     if (sect < 0) return null
-    if (floor === -Infinity) floor = fl(sect, x, z)
+    if (floor === -Infinity) { floor = Infinity; for (const [ax, az] of [[0, 0], [r * 0.7, 0], [-r * 0.7, 0], [0, r * 0.7], [0, -r * 0.7]]) { const si = sectorFor(x + ax, z + az, y); if (si >= 0) floor = Math.min(floor, fl(si, x + ax, z + az)) } if (floor > y + step) floor = -Infinity } // only floors above: no snapping up, keep falling/blocked
     const pf = platAt(x, z, y, step); if (pf > floor) floor = pf
     return { floor, ceil, sect, lotag: S[sect].lotag }
   }
