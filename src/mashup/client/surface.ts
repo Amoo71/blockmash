@@ -6,7 +6,7 @@
 import * as THREE from 'three'
 import { Vec3 } from 'vec3'
 import { addHoleUniform, dayUniform, farUniform, inHole } from './surfmat'
-import { buildDukeMap, VoxSource } from './dukemap'
+import { buildDukeMap, VoxSource, DukeLight } from './dukemap'
 import { triBoxOverlap } from '../surface/voxelize'
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { getDuke } = require('../surface/dukeworld')
@@ -35,8 +35,9 @@ export async function initSurface () {
   if (!man) return
 
   // ---------------- Duke levels, built lazily when near, dropped when far (GPU memory on mobile)
-  type Lvl = { sub: any, group?: THREE.Group, sources?: VoxSource[], building?: boolean }
+  type Lvl = { sub: any, group?: THREE.Group, sources?: VoxSource[], building?: boolean, lights?: DukeLight[], sky?: number }
   const levels: Lvl[] = dm.maps.map((sub: any) => ({ sub }))
+  ;(globalThis as any).blockmashDukeLevels = levels
   const NEAR = mobile ? 140 : 220
   const distTo = (b: any, p: any) => Math.hypot(Math.max(b.x0 - p.x, 0, p.x - b.x1), Math.max(b.z0 - p.z, 0, p.z - b.z1))
   const updateLevels = (p: any) => {
@@ -44,7 +45,7 @@ export async function initSurface () {
       const d = distTo(L.sub.bbox, p)
       if (d < NEAR && !L.group && !L.building) {
         L.building = true
-        void buildDukeMap(L.sub, './duke', man.tiles).then(r => { r.group.name = 'duke-' + L.sub.name; L.group = r.group; L.sources = r.sources; root.add(r.group); L.building = false }).catch(e => { console.warn('[blockmash] Duke level failed', L.sub.name, e); L.building = false })
+        void buildDukeMap(L.sub, './duke', man.tiles).then(r => { r.group.name = 'duke-' + L.sub.name; L.group = r.group; L.sources = r.sources; L.lights = r.lights; L.sky = r.sky; root.add(r.group); L.building = false }).catch(e => { console.warn('[blockmash] Duke level failed', L.sub.name, e); L.building = false })
       } else if (d > NEAR + 80 && L.group) {
         root.remove(L.group)
         L.group.traverse((o: any) => { o.geometry?.dispose(); o.material?.uniforms?.map?.value?.dispose?.(); o.material?.dispose?.() })

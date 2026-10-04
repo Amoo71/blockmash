@@ -6,7 +6,9 @@ import { GeoBuilder, surfaceMaterial } from './surfmat'
 const SKIP_SPRITE = (p: number) => p <= 10 || (p >= 21 && p <= 60) || p === 100 || (p >= 1680 && p < 1760) || (p >= 1820 && p <= 1830) || (p >= 2000 && p <= 2050) || (p >= 2630 && p <= 2700) || p === 1405 || p === 2271
 export type VoxSource = { pos: number[], idx: number[], tc: number[] }
 
-export async function buildDukeMap (dm: any, base: string, tiles: Record<string, { w: number, h: number, avg?: number[] }>) {
+export type DukeLight = { x: number, y: number, z: number, r: number, c: [number, number, number] }
+
+export async function buildDukeMap (dm: any, base: string, tiles: Record<string, { w: number, h: number, avg?: number[], glow?: number }>) {
   const { m, ox, oz, G, zref } = dm
   const W = m.walls; const S = m.sectors
   const X = (bx: number) => ox + bx / 512; const Z = (by: number) => oz + by / 512; const Y = (bz: number) => G + (zref - bz) / 8192 // original Build scale
@@ -64,11 +66,27 @@ export async function buildDukeMap (dm: any, base: string, tiles: Record<string,
     if (g !== solid || facesIn(w, w2)) g.quad(a, b, d, e); else g.quad(b, a, e, d)
     void tw
   }
+  // real light sources of the level: walls/sprites drawn with negative (bright) Build shade, tiles with fullbright colours
+  const lights: DukeLight[] = []
+  const lightOf = (pic: number, shade: number, x: number, y: number, z: number) => {
+    const g = tiles[pic]?.glow ?? 0
+    if (shade > -6 && g < 0.01) return
+    const a = avg(pic); const mx = Math.max(a[0], a[1], a[2], 1)
+    const k = Math.min(1.6, 0.5 + Math.max(-shade, 0) / 24 + g * 4)
+    lights.push({ x, y, z, r: 5 + Math.min(7, Math.max(-shade, 0) / 4), c: [a[0] / mx * k, a[1] / mx * k, a[2] / mx * k] })
+  }
+  const setEnv = (g: GeoBuilder, s: any) => { g.outdoor = s.cstat & 1 ? 1 : 0; g.vis = (s.vis ?? 0) / 255 }
   S.forEach((s: any, si: number) => {
     curSect = si
+    setEnv(solid, s); setEnv(masked, s)
     for (let i = s.wallptr; i < s.wallptr + s.wallnum; i++) {
       const w = W[i]; const w2 = W[w.p2]
       const fa = fz(si, w.x, w.y); const fb = fz(si, w2.x, w2.y); const ca = cz(si, w.x, w.y); const cb = cz(si, w2.x, w2.y)
+      if (w.ns < 0 || w.cstat & 16) {
+        const zm = Math.max((fa + fb) / 2 - 6 * 8192, (fa + ca) / 2)
+        const nx = -(w2.y - w.y); const ny = w2.x - w.x; const l = Math.hypot(nx, ny) || 1
+        lightOf(w.cstat & 16 ? w.opic : w.pic, w.shade, X((w.x + w2.x) / 2 + nx / l * 300), Y(zm), Z((w.y + w2.y) / 2 + ny / l * 300))
+      }
       if (w.ns < 0) {
         // walls under a parallax sky: Build draws them up to the (very high) sky ceiling; cap them at ~12 blocks
         const cap = s.cstat & 1 ? Math.min(fa, fb) - 12 * 8192 : -Infinity
@@ -98,6 +116,7 @@ export async function buildDukeMap (dm: any, base: string, tiles: Record<string,
   })
   // ---- floors / ceilings
   S.forEach((s: any, si: number) => {
+    setEnv(solid, s)
     const loops: number[][] = dm.loops[si]
     if (!loops.length) return
     const area = (l: number[]) => { let a = 0; for (let k = 0; k < l.length; k++) { const p = W[l[k]]; const q = W[l[(k + 1) % l.length]]; a += p.x * q.y - q.x * p.y } return Math.abs(a) }
@@ -131,6 +150,8 @@ export async function buildDukeMap (dm: any, base: string, tiles: Record<string,
     if (wB <= 0 || hB <= 0) continue
     const cx = X(sp.x); const czz = Z(sp.y); let yb = Y(sp.z); if (sp.cstat & 128) yb -= hB / 2
     const c = shadeC(sp.shade); masked.cur = avg(sp.pic)
+    if (S[sp.sect]) setEnv(masked, S[sp.sect])
+    lightOf(sp.pic, sp.shade, cx, yb + hB / 2, czz)
     const a = sp.ang / 2048 * Math.PI * 2
     const kind = sp.cstat & 48
     const quad = (dx: number, dz: number) => {
@@ -153,10 +174,15 @@ export async function buildDukeMap (dm: any, base: string, tiles: Record<string,
     const mesh = new THREE.Mesh(g.build(), mat)
     mesh.name = alpha ? 'duke-masked' : 'duke-level'
     mesh.frustumCulled = false
+    mesh.castShadow = !alpha
     return mesh
   }
   const group = new THREE.Group(); group.name = 'blockmash-duke-map'
   group.add(mk(solid, false), mk(masked, true))
   const sources: VoxSource[] = [{ pos: solid.pos, idx: solid.idx, tc: solid.tc }]
-  return { group, sources }
+  // parallax sky of this level (most used parallaxed ceiling tile, e.g. the LA skyline)
+  const skyCount = new Map<number, number>()
+  for (const s of S) if (s.cstat & 1) skyCount.set(s.cpic, (skyCount.get(s.cpic) ?? 0) + 1)
+  const sky = [...skyCount].sort((a, b) => b[1] - a[1])[0]?.[0]
+  return { group, sources, lights, sky }
 }

@@ -9,7 +9,7 @@ so builds containing assets/duke/ must not be published.
 import json, os, subprocess, sys, urllib.request, shutil, tempfile
 from PIL import Image
 sys.path.insert(0, os.path.dirname(__file__))
-from dukegrp import open_grp, palette, tiles, tile_image, tile_offset, SHAREWARE_MD5
+from dukegrp import open_grp, palette, fullbright, tiles, tile_image, tile_offset, SHAREWARE_MD5
 from buildmap import read_map
 MAPS = ['E1L1', 'E1L2', 'E1L3', 'E1L4', 'E1L5', 'E1L6']
 
@@ -72,6 +72,7 @@ def main():
     files, shr = open_grp(ZIP)
     pal = palette(files)
     T = tiles(files)
+    FB = fullbright(files)
     if os.path.exists(OUT):
         shutil.rmtree(OUT)
     os.makedirs(os.path.join(OUT, 'tiles'))
@@ -107,22 +108,41 @@ def main():
         for sp in m['sprites']:
             if not sp['cstat'] & 32768: need.add(sp['pic'])
         for i in sorted(need):
-            if i in T and str(i) not in meta and i not in meta:
-                img = tile_image(T[i], pal)
+            if i in T:  # level tiles carry the fullbright (emissive) mask
+                img = tile_image(T[i], pal, FB)
                 img.save(os.path.join(OUT, 'tiles', f'{i}.png'), optimize=True)
                 meta[i] = {'w': img.width, 'h': img.height, 'off': tile_offset(T[i][2])}
+                a = img.getchannel('A'); nb = sum(1 for v in a.tobytes() if v == 250)
+                if nb: meta[i]['glow'] = round(nb / (img.width * img.height), 4)
         for i in need:
             if i in meta and 'avg' not in meta[i]:
                 im = Image.open(os.path.join(OUT, 'tiles', f'{i}.png')).convert('RGBA').resize((1, 1), Image.BOX)
                 meta[i]['avg'] = list(im.getpixel((0, 0))[:3])
         json.dump(m, open(os.path.join(OUT, 'maps', mname + '.json'), 'w'), separators=(',', ':'))
+    # parallax skies: the 8-panel panorama exactly as Duke3D's setupbackdrop() lays out the sky tiles
+    PSKY = {80: [0, 2, 3, 0, 2, 0, 1, 0], 84: [0, 0, 4, 0, 0, 1, 2, 3], 89: [1, 2, 1, 3, 4, 0, 2, 3]}
+    skies = set()
+    for mname in MAPS:
+        if mname + '.MAP' not in files: continue
+        for sc in read_map(files[mname + '.MAP'])['sectors']:
+            if sc['cstat'] & 1: skies.add(sc['cpic'])
+    meta_sky = {}
+    for p in sorted(skies):
+        offs = PSKY.get(p, [0] * 8)
+        ims = [tile_image(T[p + o], pal, FB) for o in offs if p + o in T]
+        if len(ims) != 8: continue
+        h = max(i.height for i in ims); pano = Image.new('RGBA', (sum(i.width for i in ims), h))
+        x = 0
+        for i in ims: pano.paste(i, (x, h - i.height)); x += i.width
+        pano.save(os.path.join(OUT, 'tiles', f'sky_{p}.png'), optimize=True)
+        meta_sky[p] = {'w': pano.width, 'h': h}
     if os.path.isdir(ITEMS):
         for item, tile in ITEM_ICONS.items():
             if tile in T:
                 icon(tile_image(T[tile], pal)).save(os.path.join(ITEMS, item + '.png'))
     json.dump({'source': 'Duke Nukem 3D shareware v1.3d (3dduke13.zip, md5 ' + SHAREWARE_MD5 + ')',
                'notice': 'Extracted locally from the unmodified shareware episode. (c) 1996 3D Realms. Do not redistribute.',
-               'tiles': meta, 'soundExt': 'ogg' if shutil.which('ffmpeg') else 'wav', 'sounds': sorted(s.lower() for s in SOUNDS if s + '.VOC' in files)},
+               'tiles': meta, 'skies': meta_sky, 'soundExt': 'ogg' if shutil.which('ffmpeg') else 'wav', 'sounds': sorted(s.lower() for s in SOUNDS if s + '.VOC' in files)},
               open(os.path.join(OUT, 'manifest.json'), 'w'))
     open(os.path.join(OUT, 'LICENSE-3DREALMS-SHAREWARE.TXT'), 'wb').write(shr.read('LICENSE.TXT'))
     print(f'duke3d: {len(meta)} sprites, {len(os.listdir(os.path.join(OUT, "sounds")))} sounds -> {OUT}')

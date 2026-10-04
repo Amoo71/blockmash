@@ -1,6 +1,7 @@
 // Shared shader materials for the polygon surface (terrain, Duke3D map, Dark Mod buildings, Yorg track).
 // All of them clip against the same crater list (uHoles) so explosions/mining cut real holes into every mesh,
-// with a scorch ring around the cut. Lighting: baked vertex colours * day/night factor (cheap on mobile).
+// with a scorch ring around the cut. Lighting: Build sector shade (vertex colour) x sun/moon for outdoor sectors,
+// dynamic point lights, optional sun shadow map lookup, Build fullbright glow, distance/height fog, tone mapping.
 import * as THREE from 'three'
 
 export const MAX_HOLES = 64
@@ -41,18 +42,35 @@ float holeShade (vec3 p) {
 let whiteTex: THREE.Texture | null = null
 const white = () => { if (!whiteTex) { whiteTex = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1); whiteTex.needsUpdate = true } return whiteTex }
 
-type Opts = { map?: THREE.Texture | null, atlas?: boolean, alphaTest?: number, side?: THREE.Side, terrain?: boolean, textures?: THREE.Texture[] }
+// ---------------- shared lighting/atmosphere uniforms (driven by atmosphere.ts)
+export const MAX_LIGHTS = 8
+export const lightPos = { value: Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector4(0, -1000, 0, 1)) } // xyz + radius
+export const lightCol = { value: Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector3()) }
+export const lightN = { value: 0 }
+export const fogColor = { value: new THREE.Color(0.68, 0.85, 0.9) }
+/** x near, y far, z height-fog top (world y), w height-fog strength */
+export const fogParams = { value: new THREE.Vector4(80, 260, 60, 0) }
+/** colour of the outdoor (sky) ambient: bright neutral by day, blue-grey at night */
+export const skyTint = { value: new THREE.Color(1, 1, 1) }
+/** interior ambient (sector shade does the rest) */
+export const indoor = { value: 1 }
+export const glowBoost = { value: 2.2 }
+export const shadowOn = { value: 0 }
+export const shadowMap: { value: THREE.Texture | null } = { value: null }
+export const shadowMat = { value: new THREE.Matrix4() }
+export const shadowSize = { value: new THREE.Vector2(1024, 1024) }
+export const sunDir = { value: new THREE.Vector3(0.5, 1, 0.3).normalize() }
+
+type Opts = { map?: THREE.Texture | null, atlas?: boolean, alphaTest?: number, side?: THREE.Side }
 
 export function surfaceMaterial (o: Opts = {}) {
-  const uniforms: Record<string, any> = { uFar: farUniform, uHoles: holeUniform, uHoleN: holeCount, uDay: dayUniform, map: { value: o.map ?? white() }, uAtlas: { value: new THREE.Vector2(1, 1) } }
+  const uniforms: Record<string, any> = {
+    uFar: farUniform, uHoles: holeUniform, uHoleN: holeCount, uDay: dayUniform, map: { value: o.map ?? white() }, uAtlas: { value: new THREE.Vector2(1, 1) },
+    uLP: lightPos, uLC: lightCol, uLN: lightN, uFogC: fogColor, uFogP: fogParams, uSky: skyTint, uIndoor: indoor, uGlow: glowBoost,
+    uShOn: shadowOn, uShMap: { get value () { return shadowMap.value ?? white() } }, uShMat: shadowMat, uShSize: shadowSize
+  }
   const defs: Record<string, any> = {}
   if (o.atlas) defs.ATLAS = 1
-  if (o.terrain) {
-    defs.TERRAIN = 1
-    defs.NOHOLE = 1 // terrain is cut per removed block (cells vanish), not by a sphere
-    if ((o as any).texNorm) defs.TEXNORM = 1
-    o.textures!.forEach((t, i) => { uniforms['t' + i] = { value: t } })
-  }
   if (o.alphaTest) defs.ALPHATEST = o.alphaTest
   const m = new THREE.ShaderMaterial({
     uniforms,
@@ -61,58 +79,49 @@ export function surfaceMaterial (o: Opts = {}) {
     vertexShader: /* glsl */`
       #include <common>
       #include <logdepthbuf_pars_vertex>
-      attribute vec3 color;
-      varying vec3 vCol; varying vec3 vW; varying vec2 vUv;
+      attribute vec3 color; attribute vec2 aEnv;
+      varying vec3 vCol; varying vec3 vW; varying vec2 vUv; varying vec2 vEnv; varying float vDist;
       #ifdef ATLAS
       attribute vec4 aTile; varying vec4 vTile;
       #endif
-      #ifdef TERRAIN
-      attribute vec4 aMix; varying vec4 vMix; varying vec3 vN;
-      #endif
       void main () {
-        vCol = color; vUv = uv;
+        vCol = color; vUv = uv; vEnv = aEnv;
         vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz;
         #ifdef ATLAS
         vTile = aTile;
         #endif
-        #ifdef TERRAIN
-        vMix = aMix; vN = normal;
-        #endif
-        gl_Position = projectionMatrix * viewMatrix * w;
+        vec4 mv = viewMatrix * w; vDist = length(mv.xyz);
+        gl_Position = projectionMatrix * mv;
         #include <logdepthbuf_vertex>
       }`,
     fragmentShader: /* glsl */`
+      #include <common>
+      #include <packing>
       #include <logdepthbuf_pars_fragment>
       uniform sampler2D map; uniform vec2 uAtlas; uniform float uDay;
-      varying vec3 vCol; varying vec3 vW; varying vec2 vUv;
+      uniform vec4 uLP[${MAX_LIGHTS}]; uniform vec3 uLC[${MAX_LIGHTS}]; uniform int uLN;
+      uniform vec3 uFogC; uniform vec4 uFogP; uniform vec3 uSky; uniform float uIndoor; uniform float uGlow;
+      uniform float uShOn; uniform sampler2D uShMap; uniform mat4 uShMat; uniform vec2 uShSize;
+      varying vec3 vCol; varying vec3 vW; varying vec2 vUv; varying vec2 vEnv; varying float vDist;
       #ifdef ATLAS
       varying vec4 vTile;
       #endif
-      #ifdef TERRAIN
-      uniform sampler2D t0; uniform sampler2D t1; uniform sampler2D t2; uniform sampler2D t3; uniform sampler2D t4;
-      varying vec4 vMix; varying vec3 vN;
-      #endif
       ${HOLE_GLSL}
-      vec3 tn (vec4 c, float avgL, vec3 target, float sat) {
-        #ifdef TEXNORM
-        float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
-        return mix(vec3(l), c.rgb, sat) / avgL * target;
-        #else
-        return c.rgb;
-        #endif
+      float sunVis () {
+        vec4 sc = uShMat * vec4(vW, 1.0); sc.xyz /= sc.w;
+        if (sc.x < 0.0 || sc.x > 1.0 || sc.y < 0.0 || sc.y > 1.0 || sc.z > 1.0) return 1.0;
+        float z = sc.z - 0.0015; vec2 t = 1.0 / uShSize; float v = 0.0;
+        v += step(z, unpackRGBAToDepth(texture2D(uShMap, sc.xy + vec2(-0.5, -0.5) * t)));
+        v += step(z, unpackRGBAToDepth(texture2D(uShMap, sc.xy + vec2(0.5, -0.5) * t)));
+        v += step(z, unpackRGBAToDepth(texture2D(uShMap, sc.xy + vec2(-0.5, 0.5) * t)));
+        v += step(z, unpackRGBAToDepth(texture2D(uShMap, sc.xy + vec2(0.5, 0.5) * t)));
+        return v * 0.25;
       }
       void main () {
         #include <logdepthbuf_fragment>
         float sh = holeShade(vW);
         vec4 c;
-        #ifdef TERRAIN
-        vec2 uv = vW.xz * 0.25;
-        vec2 uvs = (abs(vN.x) > abs(vN.z) ? vW.zy : vW.xy) * 0.25;
-        vec4 g = texture2D(t0, uv); vec4 r = texture2D(t1, mix(uv, uvs, 0.6)); vec4 s = texture2D(t2, uv); vec4 n = texture2D(t3, uv); vec4 d = texture2D(t4, uvs);
-        float wd = max(0.0, 1.0 - vMix.x - vMix.y - vMix.z - vMix.w);
-        vec3 cc = tn(g, 0.1255, vec3(0.10, 0.25, 0.035), 0.45) * vMix.x + tn(r, 0.0742, vec3(0.2, 0.19, 0.165), 0.15) * vMix.y + tn(s, 0.2438, vec3(0.58, 0.54, 0.4), 0.12) * vMix.z + tn(n, 0.3794, vec3(0.8, 0.84, 0.9), 0.0) * vMix.w + tn(d, 0.1004, vec3(0.15, 0.085, 0.04), 0.4) * wd;
-        c = vec4(cc, 1.0);
-        #elif defined(ATLAS)
+        #ifdef ATLAS
         vec2 p = vTile.xy + mod(vUv, vTile.zw);
         c = texture2D(map, p / uAtlas);
         #else
@@ -121,7 +130,26 @@ export function surfaceMaterial (o: Opts = {}) {
         #ifdef ALPHATEST
         if (c.a < float(ALPHATEST)) discard;
         #endif
-        gl_FragColor = vec4(c.rgb * vCol * uDay * sh, 1.0);
+        // Build fullbright palette entries (alpha 250 in the extracted tiles) and negative sector/wall shade glow
+        float glow = (c.a > 0.95 && c.a < 0.99) ? 1.0 : 0.0;
+        float shadeGlow = clamp((vCol.r - 1.58) * 8.0, 0.0, 1.0);
+        // outdoor sectors follow the sun/moon, interiors keep their Build sector shade
+        vec3 amb = mix(vec3(uIndoor), uSky * uDay, vEnv.x);
+        if (uShOn > 0.5 && vEnv.x > 0.5) amb *= mix(0.55, 1.0, sunVis()) * 1.0;
+        vec3 pl = vec3(0.0);
+        for (int i = 0; i < ${MAX_LIGHTS}; i++) {
+          if (i >= uLN) break;
+          float d = distance(vW, uLP[i].xyz); float f = max(0.0, 1.0 - d / uLP[i].w);
+          pl += uLC[i] * f * f;
+        }
+        vec3 col = c.rgb * vCol * sh * (max(amb, vec3(shadeGlow * 0.9)) + pl);
+        col = mix(col, c.rgb * uGlow, glow);
+        // distance fog (denser in sectors with a high Build visibility value) + height fog in low ground
+        float fd = clamp((vDist * (0.8 + vEnv.y * 1.6) - uFogP.x) / max(1.0, uFogP.y - uFogP.x), 0.0, 1.0);
+        float fh = clamp((uFogP.z - vW.y) / 12.0, 0.0, 1.0) * uFogP.w * smoothstep(4.0, 48.0, vDist);
+        col = mix(col, uFogC, max(fd, fh));
+        gl_FragColor = vec4(col, 1.0);
+        #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`
   })
@@ -149,12 +177,15 @@ export class GeoBuilder {
   pos: number[] = []; uv: number[] = []; col: number[] = []; idx: number[] = []; tile: number[] | null = null
   /** per-triangle rgb (0..255) used by the mesh-to-voxel rim generator */
   tc: number[] = []; cur: [number, number, number] = [128, 128, 128]; tint: [number, number, number] | null = null
+  /** per-vertex environment: x = outdoor (under a parallax sky), y = Build sector visibility (0..1) */
+  env: number[] = []; outdoor = 1; vis = 0
   constructor (atlas = false) { if (atlas) this.tile = [] }
   get n () { return this.pos.length / 3 }
   v (x: number, y: number, z: number, u: number, v: number, c: number, t?: number[]) {
     this.pos.push(x, y, z); this.uv.push(u, v)
     if (this.tint) this.col.push(c * this.tint[0] / 255, c * this.tint[1] / 255, c * this.tint[2] / 255); else this.col.push(c, c, c)
     if (this.tile) this.tile.push(...(t ?? [0, 0, 1, 1]))
+    this.env.push(this.outdoor, this.vis)
     return this.n - 1
   }
   tri (a: number, b: number, c: number) { this.idx.push(a, b, c); this.tc.push(...this.cur) }
@@ -171,6 +202,7 @@ export class GeoBuilder {
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3))
     g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2))
     g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3))
+    g.setAttribute('aEnv', new THREE.Float32BufferAttribute(this.env, 2))
     if (this.tile) g.setAttribute('aTile', new THREE.Float32BufferAttribute(this.tile, 4))
     g.setIndex(this.n > 65535 ? new THREE.Uint32BufferAttribute(this.idx, 1) : new THREE.Uint16BufferAttribute(this.idx, 1))
     g.computeBoundingSphere()

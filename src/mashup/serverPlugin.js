@@ -252,7 +252,7 @@ module.exports = function installBlockMash (serv) {
   serv.commands.add({
     base: 'mashup',
     info: 'BlockMash zones: /mashup where | /mashup tp <village|duke|darkmod|yorg|vanilla> | /mashup boom',
-    usage: '/mashup where|tp <zone>|boom',
+    usage: '/mashup where|tp <zone>|boom|gfx <low|medium|ultra>',
     onlyPlayer: true,
     parse: (s) => s.trim().split(/\s+/),
     async action ([sub, arg, arg2], ctx) {
@@ -276,6 +276,7 @@ module.exports = function installBlockMash (serv) {
         bm.teleport(pl, new Vec3(p.x + 0.5, y, p.z + 0.5))
         return `Teleported to ${arg} at ${p.x} ${y} ${p.z}`
       }
+      if (sub === 'gfx') { if (!['low', 'medium', 'ultra'].includes(arg)) return 'Usage: /mashup gfx low|medium|ultra'; serv.emit('blockmashGfx', arg); return 'Graphics quality: ' + arg }
       if (sub === 'boom') { bm.primeTnt(pl.position.floored().offset(3, 0, 0), 1500); return 'Boom in 1.5 s' }
       return 'Unknown subcommand'
     }

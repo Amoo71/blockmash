@@ -44,7 +44,15 @@ def tiles(files):
                 off += w * h
     return out
 
-def tile_image(t, pal):
+def fullbright(files):
+    """palette indices the Build shade tables never darken (Duke's fullbright neon/lamp/window colours)"""
+    d = files['PALETTE.DAT']; pal = palette(files)
+    n = struct.unpack_from('<h', d, 768)[0]; lk = d[770:770 + n * 256]
+    dark = (n - 2) * 256
+    return {i for i in range(255) if lk[dark + i] == i and sum(pal[i * 3:i * 3 + 3]) > 120}
+
+def tile_image(t, pal, glow=None):
+    """RGBA image; fullbright pixels get alpha 250 (emissive mask for the renderer), opaque 255, transparent 0"""
     w, h, anm, px = t
     img = Image.new('RGBA', (w, h))
     pp = img.load()
@@ -53,7 +61,7 @@ def tile_image(t, pal):
         for y in range(h):
             c = col[y]
             if c != 255:
-                pp[x, y] = (pal[c * 3], pal[c * 3 + 1], pal[c * 3 + 2], 255)
+                pp[x, y] = (pal[c * 3], pal[c * 3 + 1], pal[c * 3 + 2], 250 if glow and c in glow else 255)
     return img
 
 def tile_offset(anm):
