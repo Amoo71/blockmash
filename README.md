@@ -1,10 +1,16 @@
 # BlockMash
 
-A browser block-game mashup: Minecraft-style survival with Duke Nukem 3D-style cities, Dark Mod-style medieval
-quarters and Yorg race tracks on the surface, vanilla-style caves and ores underneath. Non-commercial.
+A browser block-game mashup: the real Duke Nukem 3D shareware levels (from your own file), real The Dark Mod building
+prefabs and the real Yorg Orlando race track on the surface, vanilla-style caves and ores underneath. Non-commercial.
 
 - Based on [zardoy/minecraft-web-client](https://github.com/zardoy/minecraft-web-client) (MIT) – see `README.upstream.md`.
 - Textures: **PureBDcraft 128x** by https://bdcraft.net (not included – put the zip at `vendor/purebdcraft/pack.zip`).
+- **Play online (free, non-commercial):** https://amoo71.github.io/blockmash/ (`?singleplayer=1` starts directly; works on
+  phones – touch controls, Low graphics by default). The site never contains Duke Nukem 3D data: tap the small
+  **Duke3D data…** button (bottom-left on the menu/loading/pause screens) and pick your own shareware `3dduke13.zip`
+  (or `DUKE3D.GRP`). It is parsed in the browser (`src/mashup/client/dukedata.ts`, JS port of `tools/duke3d/`), stored
+  only in that browser's IndexedDB and never uploaded. Without it the Duke strip is plain terrain.
+  Site build: `tools/release/make_pages.sh <dir>` (branch `gh-pages`).
 - Asset audit: `ASSETS_AUDIT.md`. Design: `DESIGN.md`. Credits: `assets/credits.html`.
 
 ## Build & run
