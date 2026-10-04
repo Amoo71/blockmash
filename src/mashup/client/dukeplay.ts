@@ -96,7 +96,7 @@ export function initDukePlay (dm: any, levels: any[]) {
   const me = () => server?.players?.find((q: any) => q.username === bot.username) ?? server?.players?.[0]
   const hurt = (dmg: number, cause: string) => { const pl = me(); if (pl) server.blockmash?.duke?.hurt?.(pl, dmg, cause) }
   const HURT_FLOORS = new Set([200, 1082, 4240, 859]) // slime, plasma/lava, purple lava, hurt rail
-  let peakY = -Infinity; let hazardT = 0; let air = 0
+  let autoCrouch = false; let peakY = -Infinity; let hazardT = 0; let air = 0
 
   // ---------------- player controller
   let act = false; let last: any = null
@@ -106,7 +106,8 @@ export function initDukePlay (dm: any, levels: any[]) {
   bot.on('physicsTick', () => {
     const now = performance.now(); const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now
     const e = bot.entity; if (!e) return
-    const off = () => { act = false; (globalThis as any).blockmashDukeAct = false }
+    const viewer = (globalThis as any).viewer
+    const off = () => { act = false; (globalThis as any).blockmashDukeAct = false; if (viewer) viewer.playerHeight = 1.62 }
     if (bot.game?.gameMode === 'spectator' || (globalThis as any).blockmashYorg?.drive || (bot.game?.gameMode === 'creative' && bot.physics?.gravity === 0)) return off()
     // teleported / respawned since our last tick -> start again from the real position
     if (act && last && Math.hypot(e.position.x - last.x, e.position.y - last.y, e.position.z - last.z) > 2.5) act = false
@@ -123,8 +124,11 @@ export function initDukePlay (dm: any, levels: any[]) {
     ;(globalThis as any).blockmashDukeAct = true
     const c = bot.health > 0 ? bot.controlState : ({} as any)
     const f = (c.forward ? 1 : 0) - (c.back ? 1 : 0); const s = (c.right ? 1 : 0) - (c.left ? 1 : 0)
-    const crouch = !!c.sneak; const h = crouch ? 0.9 : 1.5
-    const speed = crouch ? 0.1 : c.sprint ? 0.34 : 0.25
+    // crouch: the sneak key, or automatically in vents / under low ceilings (no crouch button needed on phones)
+    const gNow = P.ground(st.x, st.z, st.y, 0.3, STEP)
+    if (autoCrouch && gNow && gNow.ceil - st.y >= 1.55) autoCrouch = false
+    const crouch = !!c.sneak || autoCrouch; let h = crouch ? 0.9 : 1.5
+    const speed = crouch ? (c.sneak ? 0.1 : 0.18) : c.sprint ? 0.34 : 0.25
     const yaw = Math.PI - e.yaw; const sn = Math.sin(yaw); const cs = Math.cos(yaw)
     let wx = -(s * cs + f * sn); let wz = f * cs - s * sn
     const wl = Math.hypot(wx, wz); if (wl > 0) { wx = wx / wl * speed; wz = wz / wl * speed }
@@ -132,7 +136,11 @@ export function initDukePlay (dm: any, levels: any[]) {
     st.vx += (wx - st.vx) * acc; st.vz += (wz - st.vz) * acc
     if (c.jump && st.on) { st.vy = 0.5; st.on = false } // Duke jumps ~1.7 blocks
     st.vy = (st.vy - 0.08) * 0.98
-    const r = P.slide(st.x, st.z, st.y, st.vx, st.vz, 0.3, h, STEP)
+    let r = P.slide(st.x, st.z, st.y, st.vx, st.vz, 0.3, h, STEP)
+    if (!crouch && st.on && Math.hypot(st.vx, st.vz) > 0.05 && Math.hypot(r.x - st.x, r.z - st.z) < Math.hypot(st.vx, st.vz) * 0.5) {
+      const r2 = P.slide(st.x, st.z, st.y, st.vx, st.vz, 0.3, 0.9, STEP)
+      if (Math.hypot(r2.x - st.x, r2.z - st.z) > Math.hypot(r.x - st.x, r.z - st.z) + 0.02) { r = r2; autoCrouch = true; h = 0.9 }
+    }
     st.x = r.x; st.z = r.z
     const g = P.ground(st.x, st.z, st.y, 0.3, STEP)
     st.y += st.vy
@@ -179,6 +187,8 @@ export function initDukePlay (dm: any, levels: any[]) {
         }
       }
     }
+    // eye height inside the Duke body (1.5 standing / 0.9 crouched; the viewer subtracts 0.3 itself while sneaking)
+    if (viewer) viewer.playerHeight = autoCrouch && !c.sneak ? 0.75 : c.sneak ? 1.05 : 1.35
     e.position.set(st.x, st.y, st.z); e.velocity.set(st.vx, st.vy, st.vz); e.onGround = st.on
     last = { x: st.x, y: st.y, z: st.z }
   })
