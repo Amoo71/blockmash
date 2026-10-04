@@ -162,6 +162,57 @@ module.exports = function installDuke (serv, bm) {
   }
   duke.fire = fire
 
+  // ---------- Duke death + level restart (no MC death screen, no MC world spawn)
+  // Getting killed, falling into the void, deadly falls and slime/lava floors all end in a Duke death:
+  // death sound + red screen, then the CURRENT level restarts at its player start with just the pistol.
+  const dukeMaps = () => getDuke(serv.overworld.seed | 0)
+  duke.levelOf = (p) => { const dm = dukeMaps(); const d = dm?.mapAt(p.x, p.z); return d ? dm.maps.indexOf(d) + 1 : 0 }
+  const restartLevel = (pl) => {
+    const s = state(pl)
+    const ds = bm.dukeStart?.(s.level || 1); if (!ds) return
+    for (let i = 0; i < pl.inventory.slots.length; i++) if (pl.inventory.slots[i]) pl.inventory.updateSlot(i, null)
+    pl.inventory.updateSlot(36, new Item(itemId('iron_horse_armor'), 1))
+    pl.heldItemSlot = 0
+    try { pl._client.write('held_item_slot', { slot: 0 }) } catch {}
+    s.ammo = { pistol: 48, shotgun: 0, chaingun: 0, rpg: 0 }; s.bombs = []
+    bm.teleport(pl, ds.pos)
+    pl.updateHealth(20)
+    try { pl.updateFood?.(20) } catch {}
+    s.dying = 0
+    hud(pl)
+    emit({ type: 'respawn', player: pl.id, level: s.level, name: ds.name })
+  }
+  duke.kill = (pl, cause = 'killed') => {
+    const s = state(pl)
+    if (s.dying || !dukeMaps()?.maps?.length) return
+    s.dying = Date.now()
+    if (pl.health > 0) pl.updateHealth(0)
+    emit({ type: 'death', player: pl.id, cause, sound: 'dmdeath', at: pl.position })
+    setTimeout(() => restartLevel(pl), 2600)
+  }
+  duke.hurt = (pl, dmg, cause = 'hurt') => {
+    const s = state(pl)
+    if (s.dying || pl.gameMode === 1 || pl.gameMode === 3) return
+    if (pl.health - dmg <= 0) return duke.kill(pl, cause)
+    pl.takeDamage({ damage: dmg, sound: 'entity.player.hurt' })
+  }
+  setInterval(() => {
+    const dm = dukeMaps(); if (!dm?.maps?.length) return
+    for (const pl of serv.players ?? []) {
+      if (!pl.position) continue
+      const s = state(pl)
+      if (s.dying) continue
+      const lv = duke.levelOf(pl.position); if (lv) s.level = lv
+      if (pl.health <= 0) { duke.kill(pl, 'killed'); continue }
+      if (pl.gameMode === 1 || pl.gameMode === 3) continue
+      // the void around / between the levels (bedrock floor at y 0 there): Duke has no outside -> dead
+      if (s.level && dm.voidAt(pl.position.x, pl.position.z)) {
+        const d = dm.maps[s.level - 1]
+        if (pl.position.y < (d.minY ?? d.start.y - 30) - 6 || pl.position.y < 4) duke.kill(pl, 'void')
+      } else if (pl.position.y < -4) duke.kill(pl, 'void')
+    }
+  }, 200)
+
   serv.on('newPlayer', (pl) => {
     const s = state(pl)
     const look = ({ yaw, pitch }) => { if (yaw !== undefined) { s.yaw = yaw; s.pitch = pitch } }

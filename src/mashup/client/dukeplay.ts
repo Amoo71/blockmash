@@ -90,6 +90,14 @@ export function initDukePlay (dm: any, levels: any[]) {
   }
   let exitCooldown = 0; let teleUntil = 0
 
+  // ---------------- Duke death: the server restarts the level; never the MC respawn (world spawn + death screen)
+  const origRespawn = bot.respawn?.bind(bot)
+  bot.respawn = () => { if (!(globalThis as any).blockmashDuke?.maps?.length) origRespawn?.() }
+  const me = () => server?.players?.find((q: any) => q.username === bot.username) ?? server?.players?.[0]
+  const hurt = (dmg: number, cause: string) => { const pl = me(); if (pl) server.blockmash?.duke?.hurt?.(pl, dmg, cause) }
+  const HURT_FLOORS = new Set([200, 1082, 4240, 859]) // slime, plasma/lava, purple lava, hurt rail
+  let peakY = -Infinity; let hazardT = 0; let air = 0
+
   // ---------------- player controller
   let act = false; let last: any = null
   const st = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, on: false }
@@ -108,11 +116,12 @@ export function initDukePlay (dm: any, levels: any[]) {
     if (!act) {
       const g = P.ground(e.position.x, e.position.z, e.position.y, 0.3, STEP)
       if (!g || e.position.y < g.floor - 0.6 || (e.position.y < g.floor + 0.3 && inHole(e.position.x, g.floor, e.position.z, 0.25))) return off()
+      peakY = -Infinity
       Object.assign(st, { x: e.position.x, y: Math.max(e.position.y, g.floor), z: e.position.z, vx: 0, vy: Math.max(0, e.velocity.y), vz: 0, on: false })
       act = true
     }
     ;(globalThis as any).blockmashDukeAct = true
-    const c = bot.controlState
+    const c = bot.health > 0 ? bot.controlState : ({} as any)
     const f = (c.forward ? 1 : 0) - (c.back ? 1 : 0); const s = (c.right ? 1 : 0) - (c.left ? 1 : 0)
     const crouch = !!c.sneak; const h = crouch ? 0.9 : 1.5
     const speed = crouch ? 0.1 : c.sprint ? 0.34 : 0.25
@@ -132,6 +141,17 @@ export function initDukePlay (dm: any, levels: any[]) {
       if (!hole && st.y <= g.floor) { st.y = g.floor; st.vy = 0; st.on = true } else st.on = false
       if (st.y + h > g.ceil && g.ceil - h >= g.floor - 0.01) { st.y = Math.min(st.y, g.ceil - h); if (st.vy > 0) st.vy = 0 }
       animate(d, dt, st, g.sect, st.on)
+      // falls: Duke shrugs off normal drops, long ones hurt, very long ones kill (not into SE7 drop shafts)
+      if (!st.on) peakY = Math.max(peakY, st.y)
+      else {
+        const drop = peakY - st.y; peakY = -Infinity
+        const shaft = transports(d).some((t: any) => t.from === g.sect)
+        if (!shaft && drop > 9 && bot.health > 0) hurt(drop >= 18 ? 999 : Math.ceil((drop - 9) * 2), 'fall')
+      }
+      // slime / lava floors hurt while you stand in them; deep water (lotag 2) drowns you after ~15 s
+      const sec = d.m.sectors[g.sect]
+      if (st.on && HURT_FLOORS.has(sec.fpic) && st.y <= g.floor + 0.05) { hazardT += dt; if (hazardT > 0.5) { hazardT = 0; hurt(sec.fpic === 1082 || sec.fpic === 4240 ? 3 : 1, 'slime') } } else hazardT = 0
+      if (sec.lotag === 2 && st.y + 1.4 < g.ceil) { air += dt; if (air > 15) { air = 14; hurt(2, 'drown') } } else air = 0
       // SE7 drop shafts: falling into one lands you in the paired sector (Duke's room-over-room trick)
       for (const t of now > teleUntil ? transports(d) : []) {
         if (t.from === g.sect && st.y < d.zToY(d.m.sectors[t.from].fz) + 1.2) {

@@ -117,6 +117,20 @@ export async function initDuke () {
     fx.push({ sprite: s, frames, t0: performance.now(), fps, px })
   }
 
+  // ----- Duke death: red tint + falling view, then the level restarts (server side)
+  const dukeDeath = (dead: boolean, level?: string) => {
+    let ov = document.getElementById('bm-duke-death')
+    if (!ov) {
+      ov = document.createElement('div'); ov.id = 'bm-duke-death'
+      ov.style.cssText = 'position:fixed;inset:0;z-index:90;pointer-events:none;background:radial-gradient(ellipse at center,rgba(150,0,0,.35),rgba(90,0,0,.85));opacity:0;transition:opacity .6s;display:flex;align-items:center;justify-content:center;font:bold 28px sans-serif;color:#ffcc33;text-shadow:2px 2px #000'
+      document.body.append(ov)
+    }
+    if (dead) { ov.textContent = ''; ov.style.transition = 'opacity .6s'; ov.style.opacity = '1'; try { bot.entity.pitch = Math.min(bot.entity.pitch, -0.6) } catch {} } else {
+      ov.textContent = level ? `${level}` : ''
+      ov.style.transition = 'opacity 1.6s'; ov.style.opacity = '0'
+    }
+  }
+
   // ----- server events (integrated singleplayer server)
   let hooked: any = null
   const hookServer = () => {
@@ -132,6 +146,8 @@ export async function initDuke () {
         if (def) anim = { frames: def.fire, t0: performance.now() }
       }
       if (ev.sound) play(ev.sound, ev.player === me ? undefined : ev.at)
+      if (ev.type === 'death' && ev.player === me) dukeDeath(true)
+      if (ev.type === 'respawn' && ev.player === me) dukeDeath(false, ev.name)
       if (ev.type === 'enemyFire') { const t = tracked.get(ev.entity); if (t) t.attack = performance.now() }
       if (ev.type === 'impact' || ev.type === 'hit') spawnFx([2595, 2596, 2597], ev.at, 64, 20)
       if (ev.type === 'rocket') {

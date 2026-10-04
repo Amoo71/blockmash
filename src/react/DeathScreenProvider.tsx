@@ -17,6 +17,7 @@ export default () => {
     bot._client.on('death_combat_event', (data) => {
       try {
         if (data.playerId !== bot.entity.id) return
+        if ((globalThis as any).blockmashDuke?.maps?.length) return
         const messageParsed = JSON.parse(data.message)
         const parts = formatMessage(messageParsed)
         dieReasonProxy.value = parts
@@ -26,6 +27,7 @@ export default () => {
     })
     bot.on('health', () => { // bot.isAlive can be already false so can't use death event (respawn packet)
       if (dieReasonProxy.value || bot.health > 0) return
+      if ((globalThis as any).blockmashDuke?.maps?.length) return // Duke mode: Duke death + level restart instead
       dieReasonProxy.value = []
     })
 

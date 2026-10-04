@@ -38,6 +38,7 @@ function getDuke () {
     const ox = x - x0 / 512; const oz = ZC - ((y0 + y1) / 2) / 512
     const dm = prepare(m, { ox, oz, G: layout.ZONE_G, zref: mainFloor(m) })
     dm.name = name
+    dm.minY = Math.min(...m.sectors.map(sc => dm.zToY(sc.fz)))
     maps.push(dm)
     x += (x1 - x0) / 512 + GAP
   }
