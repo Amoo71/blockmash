@@ -87,7 +87,26 @@ module.exports = function installBlockMash (serv) {
   }
   const mobPhysics = (e) => async (delta) => {
     const dmv = getDuke(seed()); const dd = dmv && dmv.mapAt(e.position.x, e.position.z)
-    if (dd) { const r = dukePhysics(e, dd, delta); if (r) return r }
+    if (dd) {
+      const r = dukePhysics(e, dd, delta)
+      if (r) return r
+      // Never fall back to Minecraft voxel physics while an entity is on a Duke level.
+      // A transient sector miss otherwise lets the entity fall through the Duke/MC bridge
+      // and become invisible or unreachable while it can still damage the player.
+      const f = dd.floorAt(e.position.x, e.position.z)
+      if (f) {
+        const np = e.position.clone()
+        np.y = Math.max(np.y, f.y)
+        e.velocity.x *= 0.2
+        e.velocity.z *= 0.2
+        e.velocity.y = 0
+        return { position: np, onGround: true }
+      }
+      e.velocity.x = 0
+      e.velocity.z = 0
+      e.velocity.y = 0
+      return { position: e.position.clone(), onGround: false }
+    }
     const v = e.velocity; const w = e.world; const np = e.position.clone()
     const hw = Math.min(0.45, (e.size?.x ?? 0.6) / 2); const h = e.size?.y ?? 1.8
     if (e.gravity && e.gravity.y) v.y = Math.max(-e.terminalvelocity.y, Math.min(e.terminalvelocity.y, v.y + e.gravity.y * delta))
