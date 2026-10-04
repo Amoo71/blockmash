@@ -34,6 +34,7 @@ node scripts/build.js copyFiles >/dev/null 2>&1
 node esbuild.mjs --minify --prod >/dev/null 2>&1
 rm -rf release/stage && mkdir -p "$STAGE"
 cp -r tools/release/template/. "$STAGE/"
+sed -i "s/__VER__/$VER/" "$STAGE/README-LOCAL.txt"
 cp -r dist "$STAGE/www"
 ( cd "$STAGE/www" && find . -name '*.map' -delete && rm -rf meta.json duke && cd mc-data && ls | grep -v '^1\.14\.js$' | xargs -r rm -f )
 mkdir -p "$STAGE/tools" "$STAGE/licenses"
