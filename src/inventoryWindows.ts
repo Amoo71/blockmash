@@ -114,16 +114,16 @@ export const onGameLoad = (onLoad) => {
         if (count && count > 1) {
           const slot = bot.inventory.slots[i]!
           slot.count--
-          void bot.creative.setInventorySlot(i, slot)
+          void bot.creative.setInventorySlot(i, slot).catch(() => {}) // superseded by a newer update
         } else {
-          void bot.creative.setInventorySlot(i, null)
+          void bot.creative.setInventorySlot(i, null).catch(() => {})
         }
       }
       return
     }
     const craftingSlots = bot.inventory.slots.slice(1, 5)
     const resultingItem = getResultingRecipe(craftingSlots, 2)
-    void bot.creative.setInventorySlot(craftingResultSlot, resultingItem ?? null)
+    void bot.creative.setInventorySlot(craftingResultSlot, resultingItem ?? null).catch(() => {}) // rapid slot updates cancel older sets
   }) as any)
 
   bot.on('windowClose', () => {

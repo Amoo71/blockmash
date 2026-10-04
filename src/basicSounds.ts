@@ -26,7 +26,7 @@ export async function loadSound (path: string) {
 
 export const loadOrPlaySound = async (url, soundVolume = 1) => {
   const soundBuffer = sounds[url]
-  if (!soundBuffer) {
+  if (!soundBuffer || soundBuffer instanceof ArrayBuffer) { // still decoding (another call is on it)
     const start = Date.now()
     const cancelled = await loadSound(url)
     if (cancelled || Date.now() - start > 500) return
@@ -49,12 +49,12 @@ export async function playSound (url, soundVolume = 1) {
 
   for (const [soundName, sound] of Object.entries(sounds)) {
     if (convertedSounds.includes(soundName)) continue
-    sounds[soundName] = await audioContext.decodeAudioData(sound)
-    convertedSounds.push(soundName)
+    convertedSounds.push(soundName) // mark first: concurrent calls must not decode (detach) the same buffer twice
+    try { sounds[soundName] = await audioContext.decodeAudioData(sound) } catch { delete sounds[soundName] }
   }
 
   const soundBuffer = sounds[url]
-  if (!soundBuffer) {
+  if (!soundBuffer || soundBuffer instanceof ArrayBuffer) { // still decoding (another call is on it)
     console.warn(`Sound ${url} not loaded yet`)
     return
   }
