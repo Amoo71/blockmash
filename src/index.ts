@@ -425,6 +425,10 @@ async function connect (connectOptions: ConnectOptions) {
           }
         } catch {}
       }
+      // BlockMash: real The Dark Mod building prefabs for the Dark Mod quarter lots
+      if (!globalThis.blockmashDarkmodPrefabs) {
+        try { const r = await fetch('./darkmod/prefabs/mesh.json'); if (r.ok) globalThis.blockmashDarkmodPrefabs = await r.json() } catch {}
+      }
       localServer = window.localServer = window.server = startLocalServer(serverOptions)
       // todo need just to call quit if started
       // loadingScreen.maybeRecoverable = false

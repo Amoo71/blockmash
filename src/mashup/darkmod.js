@@ -295,14 +295,14 @@ module.exports = function installDarkMod (serv, bm) {
     const routes = [
       [12, 30, 50, 78, 98, 116].map(u => at(u, roadAz(u))),
       [12, 30, 50, 78, 98, 116].map(v => at(roadBx(v), v)),
-      [at(20, 20), at(108, 20), at(108, 108), at(20, 108)]
+      [at(57, 57), at(71, 57), at(71, 71), at(57, 71)] // round the fountain plaza
     ]
     dm.spawnGuard(at(12, roadAz(12)), routes[0])
     dm.spawnGuard(at(116, roadAz(116)), [...routes[0]].reverse())
     dm.spawnGuard(at(roadBx(12), 12), routes[1])
     dm.spawnGuard(at(roadBx(116), 116), [...routes[1]].reverse(), true)
-    dm.spawnGuard(at(20, 20), routes[2])
-    // loot in houses (upper floor, next to the chest) and in the manor vault
+    dm.spawnGuard(at(57, 57), routes[2])
+    // loot at the buildings
     const ctx = { seed: serv.overworld.seed | 0, rx, rz }
     const lootNames = Object.keys(LOOT)
     let total = 0
@@ -310,12 +310,15 @@ module.exports = function installDarkMod (serv, bm) {
     for (let ci = 0; ci < 6; ci++) for (let cj = 0; cj < 6; cj++) {
       const c = cellInfo(ci, cj, ctx)
       if (!c.ok) continue
+      // the prefabs are solid facades: loot lies at the foot of the building, guards circle the manor
+      const front = (k) => at(c.u0 + ((c.w * (k + 1) / 5) | 0), c.v0 - 1)
       if (c.type === 'manor') {
-        for (let k = 0; k < 4; k++) place(lootNames[2 + k], at(c.u0 + 7 + (k % 2), c.v0 + 7 + (k >> 1), G + 2))
-        dm.spawnGuard(at(c.u0 + 5, c.v0 + 3), [at(c.u0 + 4, c.v0 + 3), at(c.u0 + 12, c.v0 + 3), at(c.u0 + 12, c.v0 + 12), at(c.u0 + 4, c.v0 + 12)])
+        for (let k = 0; k < 4; k++) place(lootNames[2 + k], front(k))
+        const r = [at(c.u0 - 2, c.v0 - 2), at(c.u0 + c.w + 1, c.v0 - 2), at(c.u0 + c.w + 1, c.v0 + c.d + 1), at(c.u0 - 2, c.v0 + c.d + 1)]
+        dm.spawnGuard(r[0], r)
       } else if (c.type === 'house') {
-        place(lootNames[(ci + cj * 3) % 3], at(c.u0 + 3, c.v0 + 1, G + 6))
-      } else place('music_disc_13', at(c.u0 + 3, c.v0 + 3, G + 2))
+        place(lootNames[(ci + cj * 3) % 3], front(1))
+      } else place('music_disc_13', front(2))
     }
     quarters.set(key, { total, found: 0 })
     // thief kit at the south gate
