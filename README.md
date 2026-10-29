@@ -1,3 +1,3 @@
 # blockmash
 
-Leer. Der alte Stand liegt im Tag `backup/blockmash-before-clean`.
+Leer. Der alte Stand ist Commit `052fc05` in der History.
