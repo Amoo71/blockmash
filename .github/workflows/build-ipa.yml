@@ -1,0 +1,83 @@
+name: Build BlockMash IPA
+
+on:
+  push:
+    branches: [ "claude/hybrid-launcher-ios-*", "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app || sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | tail -1)"
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode Project
+        run: xcodegen generate
+
+      - name: Build
+        run: |
+          xcodebuild build \
+            -project BlockMash.xcodeproj \
+            -scheme BlockMash \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            ONLY_ACTIVE_ARCH=NO | tail -20
+
+      - name: Package IPA
+        run: |
+          mkdir -p export/Payload
+          cp -r build/Build/Products/Release-iphoneos/BlockMash.app export/Payload/
+          cd export
+          zip -r ../BlockMash.ipa Payload
+          cd ..
+          ls -lh BlockMash.ipa
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BlockMash-IPA
+          path: BlockMash.ipa
+          retention-days: 90
+
+      - name: Create Release
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/claude/')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0-build.${{ github.run_number }}
+          name: "BlockMash v1.0.0 (Build ${{ github.run_number }})"
+          body: |
+            ## BlockMash Hybrid Launcher v1.0.0
+
+            Unsigned IPA for sideloading via AltStore, SideStore, LiveContainer, or similar.
+
+            ### Features
+            - Game library with NSP, NSZ, XCI, XCZ support
+            - File import via iOS Files app
+            - prod.keys management
+            - Shader cache settings
+            - Metal / MoltenVK renderer selection
+
+            ### Installation
+            1. Download `BlockMash.ipa`
+            2. Sideload with your preferred tool (AltStore, SideStore, etc.)
+          files: BlockMash.ipa
+          draft: false
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
