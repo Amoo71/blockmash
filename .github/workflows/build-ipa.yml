@@ -65,23 +65,33 @@ jobs:
         if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/claude/')
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.0-build.${{ github.run_number }}
-          name: "BlockMash v1.0.0 (Build ${{ github.run_number }})"
+          tag_name: v2.0.0-build.${{ github.run_number }}
+          name: "NXLauncher v2.0.0 (Build ${{ github.run_number }})"
           body: |
-            ## BlockMash Hybrid Launcher v1.0.0
+            ## NXLauncher v2.0.0 — Hybrid Launcher for iOS
 
             Unsigned IPA for sideloading via AltStore, SideStore, LiveContainer, or similar.
+            Target: iPhone 16 Pro / A18 Pro / iOS 27 / Metal 3
 
             ### Features
-            - Game library with NSP, NSZ, XCI, XCZ support
-            - File import via iOS Files app
-            - prod.keys management
-            - Shader cache settings
-            - Metal / MoltenVK renderer selection
+            - NSP/NSZ/XCI/XCZ game file import with NCA structure parsing
+            - PFS0 and HFS0 container format support
+            - prod.keys encryption key management (on-device)
+            - Per-title shader cache with size tracking
+            - Metal GPU renderer with resolution scaling
+            - CPU accuracy and memory layout configuration
+            - NCE (Native Code Execution) support
+            - Physical controller support (DualSense, Xbox, Pro Controller)
+            - Virtual on-screen controller
+            - Button test grid and Nintendo A/B swap
+            - Game launch state machine with FPS display
+            - Update and DLC auto-detection by title ID
 
             ### Installation
             1. Download `BlockMash.ipa`
             2. Sideload with your preferred tool (AltStore, SideStore, etc.)
+            3. Import prod.keys via Import tab
+            4. Import game files (NSP/XCI) from Files app
           files: BlockMash.ipa
           draft: false
           prerelease: true
