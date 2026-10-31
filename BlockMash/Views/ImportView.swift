@@ -5,8 +5,10 @@ struct ImportView: View {
     @EnvironmentObject var library: GameLibrary
     @State private var showingFilePicker = false
     @State private var showingKeysPicker = false
-    @State private var importedFileName: String?
+    @State private var isScanning = false
+    @State private var scanProgress: String = ""
     @State private var showingAlert = false
+    @State private var alertTitle = ""
     @State private var alertMessage = ""
 
     private let gameType = UTType("com.blockmash.game-rom") ?? .data
@@ -14,70 +16,24 @@ struct ImportView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    keysStatusRow
-                    Button {
-                        showingKeysPicker = true
-                    } label: {
-                        Label("Import prod.keys", systemImage: "key.fill")
-                    }
-                } header: {
-                    Text("Encryption Keys")
-                } footer: {
-                    Text("Required to read encrypted game files. Place your prod.keys file accessible via the Files app.")
-                }
-
-                Section {
-                    Button {
-                        showingFilePicker = true
-                    } label: {
-                        Label("Import Game File", systemImage: "doc.badge.plus")
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                } header: {
-                    Text("Add Games")
-                } footer: {
-                    Text("Supported: NSP, NSZ, XCI, XCZ. Files stay in their original location.")
-                }
-
-                Section("Supported Formats") {
-                    ForEach(GameFileType.allCases, id: \.self) { type in
-                        HStack {
-                            Image(systemName: type.icon)
-                                .foregroundStyle(.purple)
-                                .frame(width: 30)
-                            VStack(alignment: .leading) {
-                                Text(type.rawValue)
-                                    .font(.body.bold())
-                                Text(descriptionFor(type))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
-
-                Section("Storage") {
-                    LabeledContent("Games in Library", value: "\(library.games.count)")
-                    LabeledContent("Total Size", value: ByteCountFormatter.string(fromByteCount: library.totalSize, countStyle: .file))
-                }
+                keysSection
+                importSection
+                if isScanning { scanningSection }
+                formatsSection
+                storageSection
             }
             .navigationTitle("Import")
             .fileImporter(
                 isPresented: $showingFilePicker,
                 allowedContentTypes: [gameType, .data],
                 allowsMultipleSelection: true
-            ) { result in
-                handleFileImport(result)
-            }
+            ) { handleFileImport($0) }
             .fileImporter(
                 isPresented: $showingKeysPicker,
                 allowedContentTypes: [.data],
                 allowsMultipleSelection: false
-            ) { result in
-                handleKeysImport(result)
-            }
-            .alert("Import", isPresented: $showingAlert) {
+            ) { handleKeysImport($0) }
+            .alert(alertTitle, isPresented: $showingAlert) {
                 Button("OK") {}
             } message: {
                 Text(alertMessage)
@@ -85,45 +41,128 @@ struct ImportView: View {
         }
     }
 
-    private var keysStatusRow: some View {
-        HStack {
-            Image(systemName: library.keysImported ? "checkmark.circle.fill" : "xmark.circle")
-                .foregroundStyle(library.keysImported ? .green : .red)
-            Text(library.keysImported ? "prod.keys loaded" : "No keys imported")
+    private var keysSection: some View {
+        Section {
+            HStack {
+                Image(systemName: library.keysImported ? "checkmark.shield.fill" : "xmark.shield")
+                    .foregroundStyle(library.keysImported ? .green : .red)
+                    .font(.title2)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(library.keysImported ? "prod.keys loaded" : "Keys required")
+                        .font(.body.bold())
+                    if let keyStore = KeyStore.loadFromDocuments() {
+                        Text("\(keyStore.keyCount) keys (\(keyStore.titleKeyCount) title, \(keyStore.keyAreaKeyCount) area)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+            }
+            Button {
+                showingKeysPicker = true
+            } label: {
+                Label("Import prod.keys", systemImage: "key.fill")
+            }
+        } header: {
+            Text("Encryption Keys")
+        } footer: {
+            Text("Required to decrypt and read game files. Your keys stay on-device.")
+        }
+    }
+
+    private var importSection: some View {
+        Section {
+            Button {
+                showingFilePicker = true
+            } label: {
+                HStack {
+                    Image(systemName: "doc.badge.plus")
+                        .font(.title2)
+                        .foregroundStyle(.purple)
+                    VStack(alignment: .leading) {
+                        Text("Import Game Files")
+                            .font(.body.bold())
+                        Text("NSP, NSZ, XCI, XCZ from Files app")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        } header: {
+            Text("Add Games")
+        } footer: {
+            Text("Files are scanned to extract NCA structure and metadata. Originals stay in place.")
+        }
+    }
+
+    private var scanningSection: some View {
+        Section {
+            HStack {
+                ProgressView()
+                    .padding(.trailing, 8)
+                Text(scanProgress)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var formatsSection: some View {
+        Section("Supported Formats") {
+            ForEach(GameFileType.allCases, id: \.self) { type in
+                HStack {
+                    Image(systemName: type.icon)
+                        .foregroundStyle(.purple)
+                        .frame(width: 30)
+                    VStack(alignment: .leading) {
+                        Text(type.rawValue).font(.body.bold())
+                        Text(descriptionFor(type))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    private var storageSection: some View {
+        Section("Library Stats") {
+            LabeledContent("Games", value: "\(library.games.count)")
+            LabeledContent("Updates", value: "\(library.games.flatMap(\.updates).count)")
+            LabeledContent("DLC", value: "\(library.games.flatMap(\.dlc).count)")
+            LabeledContent("Total Size", value: ByteCountFormatter.string(fromByteCount: library.totalSize, countStyle: .file))
         }
     }
 
     private func handleFileImport(_ result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):
-            var imported = 0
-            for url in urls {
-                guard url.startAccessingSecurityScopedResource() else { continue }
-                defer { url.stopAccessingSecurityScopedResource() }
-
-                let ext = url.pathExtension.lowercased()
-                guard let fileType = GameFileType.from(extension: ext) else { continue }
-
-                let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
-                let size = (attrs?[.size] as? Int64) ?? 0
-                let name = url.deletingPathExtension().lastPathComponent
-                    .replacingOccurrences(of: "[", with: "(")
-                    .replacingOccurrences(of: "]", with: ")")
-
-                let game = GameEntry(
-                    title: name,
-                    fileType: fileType,
-                    fileSize: size,
-                    filePath: url.path
-                )
-                library.addGame(game)
-                imported += 1
+            isScanning = true
+            Task {
+                var imported = 0
+                var errors: [String] = []
+                for url in urls {
+                    guard url.startAccessingSecurityScopedResource() else { continue }
+                    defer { url.stopAccessingSecurityScopedResource() }
+                    scanProgress = "Scanning \(url.lastPathComponent)..."
+                    do {
+                        let _ = try await library.importFile(url: url)
+                        imported += 1
+                    } catch {
+                        errors.append("\(url.lastPathComponent): \(error.localizedDescription)")
+                    }
+                }
+                isScanning = false
+                alertTitle = "Import Complete"
+                if errors.isEmpty {
+                    alertMessage = "\(imported) file(s) imported and scanned."
+                } else {
+                    alertMessage = "\(imported) imported. \(errors.count) failed:\n\(errors.joined(separator: "\n"))"
+                }
+                showingAlert = true
             }
-            alertMessage = imported > 0 ? "\(imported) game(s) imported." : "No supported files found."
-            showingAlert = true
-
         case .failure(let error):
-            alertMessage = "Import failed: \(error.localizedDescription)"
+            alertTitle = "Import Failed"
+            alertMessage = error.localizedDescription
             showingAlert = true
         }
     }
@@ -133,7 +172,8 @@ struct ImportView: View {
         case .success(let urls):
             guard let url = urls.first else { return }
             guard url.startAccessingSecurityScopedResource() else {
-                alertMessage = "Could not access the selected file."
+                alertTitle = "Error"
+                alertMessage = "Cannot access the selected file."
                 showingAlert = true
                 return
             }
@@ -145,24 +185,27 @@ struct ImportView: View {
 
             do {
                 try FileManager.default.copyItem(at: url, to: dest)
+                let keyStore = try KeyStore.load(from: dest)
                 library.setKeysImported(true)
-                alertMessage = "prod.keys imported successfully."
+                alertTitle = "Keys Imported"
+                alertMessage = "\(keyStore.keyCount) keys loaded (\(keyStore.titleKeyCount) title keys, \(keyStore.keyAreaKeyCount) key area keys)."
             } catch {
+                alertTitle = "Error"
                 alertMessage = "Failed to import keys: \(error.localizedDescription)"
             }
             showingAlert = true
-
         case .failure(let error):
-            alertMessage = "Import failed: \(error.localizedDescription)"
+            alertTitle = "Error"
+            alertMessage = error.localizedDescription
             showingAlert = true
         }
     }
 
     private func descriptionFor(_ type: GameFileType) -> String {
         switch type {
-        case .nsp: return "Nintendo Submission Package"
-        case .nsz: return "Compressed NSP"
-        case .xci: return "NX Game Card Image"
+        case .nsp: return "Nintendo Submission Package (eShop)"
+        case .nsz: return "Compressed NSP (smaller download)"
+        case .xci: return "NX Game Card Image (cartridge dump)"
         case .xcz: return "Compressed XCI"
         }
     }

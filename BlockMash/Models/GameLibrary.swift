@@ -39,8 +39,58 @@ class GameLibrary: ObservableObject {
     }
 
     func addGame(_ game: GameEntry) {
-        games.append(game)
+        if let existing = games.firstIndex(where: { $0.titleId == game.titleId && !game.titleId.isEmpty }) {
+            games[existing] = game
+        } else {
+            games.append(game)
+        }
         save()
+    }
+
+    func importFile(url: URL) async throws -> GameEntry {
+        let result = try await GameScanner.shared.scan(url: url)
+
+        switch result.contentType {
+        case .update:
+            if let idx = games.firstIndex(where: { $0.titleId.prefix(13) == result.titleId.prefix(13) }) {
+                let update = GameUpdate(
+                    version: result.version,
+                    filePath: url.path,
+                    fileSize: result.fileSize
+                )
+                games[idx].updates.append(update)
+                save()
+                return games[idx]
+            }
+        case .dlc:
+            if let idx = games.firstIndex(where: { $0.titleId.prefix(13) == result.titleId.prefix(13) }) {
+                let dlc = GameDLC(
+                    name: result.title,
+                    titleId: result.titleId,
+                    filePath: url.path,
+                    fileSize: result.fileSize
+                )
+                games[idx].dlc.append(dlc)
+                save()
+                return games[idx]
+            }
+        case .base:
+            break
+        }
+
+        let game = GameEntry(
+            title: result.title,
+            titleId: result.titleId,
+            version: result.version,
+            fileType: result.fileType,
+            fileSize: result.fileSize,
+            filePath: url.path,
+            ncaCount: result.ncaCount,
+            hasProgramNCA: result.hasProgramNCA,
+            hasControlNCA: result.hasControlNCA
+        )
+        addGame(game)
+        return game
     }
 
     func removeGame(_ game: GameEntry) {

@@ -17,11 +17,17 @@ struct ContentView: View {
                 }
                 .tag(1)
 
+            ControllerView()
+                .tabItem {
+                    Label("Controller", systemImage: "dpad.fill")
+                }
+                .tag(2)
+
             SettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "gearshape.fill")
                 }
-                .tag(2)
+                .tag(3)
         }
         .tint(.purple)
     }
