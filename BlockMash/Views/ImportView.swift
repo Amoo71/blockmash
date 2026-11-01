@@ -168,36 +168,42 @@ struct ImportView: View {
     }
 
     private func handleKeysImport(_ result: Result<[URL], Error>) {
+        var title = ""
+        var message = ""
+
         switch result {
         case .success(let urls):
-            guard let url = urls.first else { return }
-            guard url.startAccessingSecurityScopedResource() else {
-                alertTitle = "Error"
-                alertMessage = "Cannot access the selected file."
-                showingAlert = true
-                return
-            }
-            defer { url.stopAccessingSecurityScopedResource() }
+            if let url = urls.first {
+                let hasAccess = url.startAccessingSecurityScopedResource()
+                defer { if hasAccess { url.stopAccessingSecurityScopedResource() } }
 
-            let dest = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("prod.keys")
-            try? FileManager.default.removeItem(at: dest)
+                let dest = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                    .appendingPathComponent("prod.keys")
+                try? FileManager.default.removeItem(at: dest)
 
-            do {
-                try FileManager.default.copyItem(at: url, to: dest)
-                let keyStore = try KeyStore.load(from: dest)
-                library.setKeysImported(true)
-                alertTitle = "Keys Imported"
-                alertMessage = "\(keyStore.keyCount) keys loaded (\(keyStore.titleKeyCount) title keys, \(keyStore.keyAreaKeyCount) key area keys)."
-            } catch {
-                alertTitle = "Error"
-                alertMessage = "Failed to import keys: \(error.localizedDescription)"
+                do {
+                    try FileManager.default.copyItem(at: url, to: dest)
+                    let keyStore = try KeyStore.load(from: dest)
+                    library.setKeysImported(true)
+                    title = "Keys Imported"
+                    message = "\(keyStore.keyCount) keys loaded (\(keyStore.titleKeyCount) title keys, \(keyStore.keyAreaKeyCount) key area keys)."
+                } catch {
+                    title = "Error"
+                    message = "Failed: \(error.localizedDescription)\nFile: \(url.lastPathComponent)\nAccess: \(hasAccess)"
+                }
+            } else {
+                title = "Error"
+                message = "No file was selected."
             }
-            showingAlert = true
         case .failure(let error):
-            alertTitle = "Error"
-            alertMessage = error.localizedDescription
-            showingAlert = true
+            title = "Error"
+            message = error.localizedDescription
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            self.alertTitle = title
+            self.alertMessage = message
+            self.showingAlert = true
         }
     }
 
