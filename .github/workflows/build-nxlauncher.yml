@@ -41,7 +41,7 @@ jobs:
         run: |
           set -euo pipefail
           git lfs install
-          git clone --depth 1 "$MELONX_REPO" melonx
+          git clone --depth 30 "$MELONX_REPO" melonx
           git -C melonx lfs pull
           echo "MELONX_COMMIT=$(git -C melonx rev-parse HEAD)" >> "$GITHUB_ENV"
           git -C melonx log -1 --format='Upstream commit: %H (%cd) %s'
@@ -94,6 +94,46 @@ jobs:
         working-directory: melonx
         run: xcodebuild -project src/MeloNX/MeloNX.xcodeproj -scheme MeloNX -resolvePackageDependencies
 
+      - name: Build Ryujinx core (.NET NativeAOT)
+        working-directory: melonx
+        run: |
+          log="$GITHUB_WORKSPACE/core.log"
+          if ! sh ./distribution/ios/xc-compile.sh > "$log" 2>&1; then
+            grep -n -E "error|Error" "$log" | head -60 || true
+            tail -80 "$log"
+            exit 1
+          fi
+          tail -15 "$log"
+          find src/Ryujinx.Headless.SDL2/bin -name 'Ryujinx.Headless.SDL2.dylib' -exec ls -lh {} \;
+
+      - name: Patch upstream Swift sources
+        working-directory: melonx
+        run: |
+          set -uo pipefail
+          echo "::group::Upstream history and tags"
+          git log --oneline -20
+          git ls-remote --tags origin | tail -15
+          echo "::endgroup::"
+
+          ev=$(grep -rlE --include='*.swift' 'struct EmulationView\b' src/MeloNX/MeloNX | head -1)
+          if [ -z "$ev" ]; then
+            echo "::warning::struct EmulationView not found"
+            exit 0
+          fi
+          echo "EmulationView is declared in $ev"
+          echo "::group::$ev (upstream)"
+          sed -n '1,140p' "$ev"
+          echo "::endgroup::"
+          echo "::group::ContentView.swift lines 60-100"
+          sed -n '60,100p' src/MeloNX/MeloNX/UI/Main/ContentView.swift
+          echo "::endgroup::"
+
+          # A private stored property (or private init) makes EmulationView's initializer
+          # private, so ContentView.swift can't construct it. Widen those declarations.
+          perl -pi -e 's/\b(?:file)?private (?=(?:var|let|init)\b)//g' "$ev"
+          git diff --stat
+          git diff -- "$ev" | head -120
+
       - name: Build (Ryujinx core + app)
         working-directory: melonx
         run: |
@@ -131,7 +171,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: NXLauncher-build-log
-          path: build.log
+          path: |
+            build.log
+            core.log
           if-no-files-found: ignore
 
       - name: Package NXLauncher.ipa
