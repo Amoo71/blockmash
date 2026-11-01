@@ -127,6 +127,9 @@ jobs:
           echo "::group::ContentView.swift lines 60-100"
           sed -n '60,100p' src/MeloNX/MeloNX/UI/Main/ContentView.swift
           echo "::endgroup::"
+          echo "::group::NativeSettingsManager.swift lines 80-130 (Setting.deinit crashes the optimizer)"
+          sed -n '80,130p' src/MeloNX/MeloNX/UI/Main/Settings/NativeSettingsManager.swift || true
+          echo "::endgroup::"
 
           # A private stored property (or private init) makes EmulationView's initializer
           # private, so ContentView.swift can't construct it. Widen those declarations.
@@ -144,6 +147,9 @@ jobs:
           # SWIFT_OPTIMIZATION_LEVEL=-Onone: Swift 6.3.3 (Xcode 26.6) crashes in EarlyPerfInliner
           # on Setting.deinit (NativeSettingsManager.swift) when optimizing. Emulation runs in the
           # .NET core, which stays fully optimized; only the Swift UI layer is built unoptimized.
+          # -Onone would also switch on the preview "debug dylib" layout (a stub executable that
+          # loads MeloNX.debug.dylib via @executable_path, which breaks inside LiveContainer) and
+          # Swift asserts; ENABLE_DEBUG_DYLIB=NO and -assert-config Release keep release behaviour.
           log="$GITHUB_WORKSPACE/build.log"
           if ! xcodebuild \
               -project src/MeloNX/MeloNX.xcodeproj \
@@ -160,6 +166,9 @@ jobs:
               AD_HOC_CODE_SIGNING_ALLOWED=YES \
               ONLY_ACTIVE_ARCH=NO \
               SWIFT_OPTIMIZATION_LEVEL=-Onone \
+              ENABLE_DEBUG_DYLIB=NO \
+              ENABLE_PREVIEWS=NO \
+              "OTHER_SWIFT_FLAGS=\$(inherited) -assert-config Release" \
               > "$log" 2>&1; then
             echo "=== errors ==="
             grep -n -E "error[: ]|Error MSB|: error |Stack dump:|ld: " "$log" | cut -c1-400 | head -100 || true
@@ -202,6 +211,19 @@ jobs:
           /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $BUNDLE_ID" "$plist"
           /usr/libexec/PlistBuddy -c "Delete :CFBundleDisplayName" "$plist" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string $APP_NAME" "$plist"
+
+          # A stub executable + MeloNX.debug.dylib can't start inside LiveContainer.
+          if [ -e "$app/MeloNX.debug.dylib" ] || [ -e "$app/__preview.dylib" ]; then
+            echo "::error::Build produced the preview debug-dylib layout"
+            exit 1
+          fi
+
+          # Same as the BlockMash build that runs in LiveContainer: MH_EXECUTE -> MH_DYLIB.
+          bin="$app/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$plist")"
+          test "$(xxd -p -l 4 "$bin")" = "cffaedfe"
+          printf '\x06' | dd of="$bin" bs=1 seek=12 count=1 conv=notrunc 2>/dev/null
+          otool -h "$bin"
+          ls -lh "$bin"
 
           # Ad-hoc sign so sideloading tools can read the entitlements the core needs.
           cat > nxlauncher.entitlements <<'EOF'
@@ -250,7 +272,8 @@ jobs:
             Changes from upstream:
             - App name NXLauncher, bundle ID `com.blockmash.nxlauncher`
             - `EmulationView.swift`: `private` removed from stored properties so its initializer is reachable (upstream doesn't compile otherwise)
-            - Swift layer built without optimization (`-Onone`): the Xcode 26.6 Swift compiler crashes when optimizing it. The Ryujinx core, which does the emulation, is fully optimized.
+            - Swift layer built without optimization (`-Onone`): the Xcode 26.6 Swift compiler crashes when optimizing it. The Ryujinx core, which does the emulation, is fully optimized. Asserts stay off and the app is a single executable, as in a normal release build.
+            - Main executable's Mach-O type set to MH_DYLIB for LiveContainer
 
             ### Requirements
             - **JIT** — the core cannot run without it. In LiveContainer, launch the app with JIT enabled (set up StikDebug; on iOS 26+ StikDebug is required).
