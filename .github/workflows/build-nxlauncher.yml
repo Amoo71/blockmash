@@ -45,8 +45,23 @@ jobs:
           git -C melonx lfs pull
           echo "MELONX_COMMIT=$(git -C melonx rev-parse HEAD)" >> "$GITHUB_ENV"
           git -C melonx log -1 --format='Upstream commit: %H (%cd) %s'
+
+          echo "::group::Upstream layout"
+          cat melonx/.gitattributes || true
+          echo "--- LFS files"
+          git -C melonx lfs ls-files | head -40 || true
+          echo "--- src/MeloNX/MeloNX"
+          ls -la melonx/src/MeloNX/MeloNX/ || true
+          echo "--- binaries"
+          find melonx/src/MeloNX -maxdepth 5 \( -name '*.dylib' -o -name '*.xcframework' -o -name '*.framework' \) -print0 \
+            | xargs -0 -I{} sh -c 'printf "%s: " "{}"; file -b "{}" | cut -c1-100' || true
+          echo "::endgroup::"
+
           # LFS pointers instead of real binaries would only fail much later at link time.
-          file "melonx/src/MeloNX/MeloNX/Dependencies/Dynamic Libraries/libMoltenVK.dylib" | grep -q "Mach-O"
+          moltenvk="melonx/src/MeloNX/MeloNX/Dependencies/Dynamic Libraries/libMoltenVK.dylib"
+          if ! file "$moltenvk" | grep -q "Mach-O"; then
+            echo "::warning::$moltenvk is missing or not a Mach-O binary"
+          fi
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
