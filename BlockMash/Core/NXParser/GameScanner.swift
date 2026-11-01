@@ -24,10 +24,8 @@ actor GameScanner {
     func scan(url: URL) async throws -> ScanResult {
         let ext = url.pathExtension.lowercased()
 
-        guard url.startAccessingSecurityScopedResource() else {
-            throw ScanError.accessDenied
-        }
-        defer { url.stopAccessingSecurityScopedResource() }
+        let hasAccess = url.startAccessingSecurityScopedResource()
+        defer { if hasAccess { url.stopAccessingSecurityScopedResource() } }
 
         let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
         let fileSize = (attrs[.size] as? Int64) ?? 0

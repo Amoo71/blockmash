@@ -11,10 +11,8 @@ struct KeyStore {
     var keyAreaKeyCount: Int { keys.filter { $0.key.contains("key_area_key") }.count }
 
     static func load(from url: URL) throws -> KeyStore {
-        guard url.startAccessingSecurityScopedResource() else {
-            throw KeyStoreError.accessDenied
-        }
-        defer { url.stopAccessingSecurityScopedResource() }
+        let hasAccess = url.startAccessingSecurityScopedResource()
+        defer { if hasAccess { url.stopAccessingSecurityScopedResource() } }
 
         let content = try String(contentsOf: url, encoding: .utf8)
         return parse(content: content)

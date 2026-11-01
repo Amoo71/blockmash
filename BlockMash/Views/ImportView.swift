@@ -5,20 +5,25 @@ struct ImportView: View {
     @EnvironmentObject var library: GameLibrary
     @State private var showingFilePicker = false
     @State private var showingKeysPicker = false
-    @State private var isScanning = false
-    @State private var scanProgress: String = ""
-    @State private var showingAlert = false
-    @State private var alertTitle = ""
-    @State private var alertMessage = ""
+    @State private var statusLines: [StatusLine] = []
+    @State private var isWorking = false
 
     private let gameType = UTType("com.blockmash.game-rom") ?? .data
+
+    struct StatusLine: Identifiable {
+        let id = UUID()
+        let kind: Kind
+        let text: String
+        let timestamp = Date()
+        enum Kind { case info, success, error, progress }
+    }
 
     var body: some View {
         NavigationStack {
             List {
+                if !statusLines.isEmpty { statusSection }
                 keysSection
                 importSection
-                if isScanning { scanningSection }
                 formatsSection
                 storageSection
             }
@@ -33,11 +38,43 @@ struct ImportView: View {
                 allowedContentTypes: [.data],
                 allowsMultipleSelection: true
             ) { handleKeysImport($0) }
-            .alert(alertTitle, isPresented: $showingAlert) {
-                Button("OK") {}
-            } message: {
-                Text(alertMessage)
+        }
+    }
+
+    private var statusSection: some View {
+        Section {
+            ForEach(statusLines.reversed()) { line in
+                HStack(alignment: .top, spacing: 10) {
+                    icon(for: line.kind)
+                        .frame(width: 20)
+                    Text(line.text)
+                        .font(.caption)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
+            if !statusLines.isEmpty && !isWorking {
+                Button("Clear log") {
+                    withAnimation { statusLines = [] }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+        } header: {
+            HStack {
+                Text("Status")
+                Spacer()
+                if isWorking { ProgressView().scaleEffect(0.8) }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func icon(for kind: StatusLine.Kind) -> some View {
+        switch kind {
+        case .info: Image(systemName: "info.circle").foregroundStyle(.blue)
+        case .success: Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+        case .error: Image(systemName: "xmark.octagon.fill").foregroundStyle(.red)
+        case .progress: ProgressView().scaleEffect(0.6)
         }
     }
 
@@ -63,6 +100,7 @@ struct ImportView: View {
             } label: {
                 Label("Import prod.keys", systemImage: "key.fill")
             }
+            .disabled(isWorking)
         } header: {
             Text("Encryption Keys")
         } footer: {
@@ -88,21 +126,11 @@ struct ImportView: View {
                     }
                 }
             }
+            .disabled(isWorking)
         } header: {
             Text("Add Games")
         } footer: {
             Text("Files are scanned to extract NCA structure and metadata. Originals stay in place.")
-        }
-    }
-
-    private var scanningSection: some View {
-        Section {
-            HStack {
-                ProgressView()
-                    .padding(.trailing, 8)
-                Text(scanProgress)
-                    .foregroundStyle(.secondary)
-            }
         }
     }
 
@@ -133,77 +161,70 @@ struct ImportView: View {
         }
     }
 
+    private func log(_ kind: StatusLine.Kind, _ text: String) {
+        statusLines.append(StatusLine(kind: kind, text: text))
+    }
+
     private func handleFileImport(_ result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):
-            isScanning = true
-            Task {
+            log(.info, "Picked \(urls.count) file(s)")
+            isWorking = true
+            Task { @MainActor in
                 var imported = 0
-                var errors: [String] = []
                 for url in urls {
-                    guard url.startAccessingSecurityScopedResource() else { continue }
-                    defer { url.stopAccessingSecurityScopedResource() }
-                    scanProgress = "Scanning \(url.lastPathComponent)..."
+                    log(.progress, "Scanning \(url.lastPathComponent)…")
                     do {
                         let _ = try await library.importFile(url: url)
                         imported += 1
+                        log(.success, "Imported \(url.lastPathComponent)")
                     } catch {
-                        errors.append("\(url.lastPathComponent): \(error.localizedDescription)")
+                        log(.error, "\(url.lastPathComponent): \(error.localizedDescription)")
                     }
                 }
-                isScanning = false
-                alertTitle = "Import Complete"
-                if errors.isEmpty {
-                    alertMessage = "\(imported) file(s) imported and scanned."
-                } else {
-                    alertMessage = "\(imported) imported. \(errors.count) failed:\n\(errors.joined(separator: "\n"))"
-                }
-                showingAlert = true
+                log(.success, "Done — \(imported)/\(urls.count) imported")
+                isWorking = false
             }
         case .failure(let error):
-            alertTitle = "Import Failed"
-            alertMessage = error.localizedDescription
-            showingAlert = true
+            log(.error, "Picker failed: \(error.localizedDescription)")
         }
     }
 
     private func handleKeysImport(_ result: Result<[URL], Error>) {
-        var title = ""
-        var message = ""
-
         switch result {
         case .success(let urls):
-            if let url = urls.first {
+            guard let url = urls.first else {
+                log(.error, "No file was selected")
+                return
+            }
+            log(.info, "Picked keys file: \(url.lastPathComponent)")
+            isWorking = true
+            Task { @MainActor in
+                defer { isWorking = false }
+
                 let hasAccess = url.startAccessingSecurityScopedResource()
                 defer { if hasAccess { url.stopAccessingSecurityScopedResource() } }
+
+                log(.progress, "Access acquired: \(hasAccess)")
 
                 let dest = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
                     .appendingPathComponent("prod.keys")
                 try? FileManager.default.removeItem(at: dest)
 
                 do {
-                    try FileManager.default.copyItem(at: url, to: dest)
+                    let data = try Data(contentsOf: url)
+                    try data.write(to: dest)
+                    log(.success, "Copied \(data.count) bytes to Documents/prod.keys")
+
                     let keyStore = try KeyStore.load(from: dest)
                     library.setKeysImported(true)
-                    title = "Keys Imported"
-                    message = "\(keyStore.keyCount) keys loaded (\(keyStore.titleKeyCount) title keys, \(keyStore.keyAreaKeyCount) key area keys)."
+                    log(.success, "Loaded \(keyStore.keyCount) keys (\(keyStore.titleKeyCount) title, \(keyStore.keyAreaKeyCount) area)")
                 } catch {
-                    title = "Error"
-                    message = "Failed: \(error.localizedDescription)\nFile: \(url.lastPathComponent)\nAccess: \(hasAccess)"
+                    log(.error, "Failed: \(error.localizedDescription)")
                 }
-            } else {
-                title = "Error"
-                message = "No file was selected."
             }
         case .failure(let error):
-            title = "Error"
-            message = error.localizedDescription
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            self.alertTitle = title
-            self.alertMessage = message
-            self.showingAlert = true
+            log(.error, "Picker failed: \(error.localizedDescription)")
         }
     }
 

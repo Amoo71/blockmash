@@ -34,11 +34,9 @@ class GameLauncher: ObservableObject {
     @Published var fps: Double = 0
     @Published var frametime: Double = 0
 
-    private let configStore: GameConfigStore
     private var engineConfig: EngineConfig
 
-    init(configStore: GameConfigStore, engineConfig: EngineConfig = .forDevice()) {
-        self.configStore = configStore
+    init(engineConfig: EngineConfig = .forDevice()) {
         self.engineConfig = engineConfig
     }
 

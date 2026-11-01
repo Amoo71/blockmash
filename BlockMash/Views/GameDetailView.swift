@@ -2,13 +2,11 @@ import SwiftUI
 
 struct GameDetailView: View {
     @EnvironmentObject var library: GameLibrary
-    @EnvironmentObject var configStore: GameConfigStore
-    @StateObject private var launcher: GameLauncher
+    @StateObject private var launcher = GameLauncher()
     let game: GameEntry
 
     init(game: GameEntry) {
         self.game = game
-        self._launcher = StateObject(wrappedValue: GameLauncher(configStore: GameConfigStore()))
     }
 
     var body: some View {
