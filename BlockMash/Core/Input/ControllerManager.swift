@@ -74,8 +74,8 @@ class ControllerManager: ObservableObject {
         state.zl = gamepad.leftTrigger.isPressed
         state.zr = gamepad.rightTrigger.isPressed
 
-        if let menu = gamepad.buttonMenu { state.plus = menu.isPressed }
-        if let options = gamepad.buttonOptions { state.minus = options.isPressed }
+        state.plus = gamepad.buttonMenu.isPressed
+        state.minus = gamepad.buttonOptions?.isPressed ?? false
 
         state.dpadUp = gamepad.dpad.up.isPressed
         state.dpadDown = gamepad.dpad.down.isPressed
