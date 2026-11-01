@@ -99,8 +99,7 @@ class ControllerManager: ObservableObject {
             GCInputLeftThumbstick, GCInputRightThumbstick,
             GCInputButtonA, GCInputButtonB, GCInputButtonX, GCInputButtonY,
             GCInputLeftShoulder, GCInputRightShoulder,
-            GCInputLeftTrigger, GCInputRightTrigger,
-            GCInputDirectionPad
+            GCInputLeftTrigger, GCInputRightTrigger
         ]
 
         let vc = GCVirtualController(configuration: config)

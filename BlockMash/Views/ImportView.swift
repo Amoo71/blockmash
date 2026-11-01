@@ -30,7 +30,7 @@ struct ImportView: View {
             ) { handleFileImport($0) }
             .fileImporter(
                 isPresented: $showingKeysPicker,
-                allowedContentTypes: [.data],
+                allowedContentTypes: [.data, .text, .plainText, .item],
                 allowsMultipleSelection: false
             ) { handleKeysImport($0) }
             .alert(alertTitle, isPresented: $showingAlert) {
