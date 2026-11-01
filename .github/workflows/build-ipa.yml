@@ -45,26 +45,56 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             ONLY_ACTIVE_ARCH=NO | tail -20
 
+      - name: Verify app bundle
+        run: |
+          APP="build/Build/Products/Release-iphoneos/BlockMash.app"
+          echo "=== App bundle contents ==="
+          ls -la "$APP/"
+          echo ""
+          echo "=== Info.plist (processed) ==="
+          plutil -p "$APP/Info.plist"
+          echo ""
+          echo "=== CFBundleExecutable ==="
+          /usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$APP/Info.plist"
+          echo ""
+          echo "=== CFBundleIdentifier ==="
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Info.plist"
+          echo ""
+          echo "=== Binary type before patch ==="
+          file "$APP/BlockMash"
+          otool -h "$APP/BlockMash" | head -8
+
       - name: Patch binary for LiveContainer
         run: |
           BINARY="build/Build/Products/Release-iphoneos/BlockMash.app/BlockMash"
-          echo "Before patching:"
-          otool -h "$BINARY" | head -8
-          # Mach-O header offset 12 = filetype
-          # MH_EXECUTE = 0x02 -> MH_DYLIB = 0x06
-          # This lets LiveContainer dlopen() the binary
+          # Mach-O 64-bit header offset 12 = filetype
+          # MH_EXECUTE (0x02) -> MH_DYLIB (0x06)
+          # LiveContainer uses dlopen() which requires MH_DYLIB
           printf '\x06' | dd of="$BINARY" bs=1 seek=12 count=1 conv=notrunc 2>&1
-          echo "After patching:"
+          echo "=== Binary type after patch ==="
+          file "$BINARY"
           otool -h "$BINARY" | head -8
+
+      - name: Ad-hoc codesign
+        run: |
+          APP="build/Build/Products/Release-iphoneos/BlockMash.app"
+          # Ad-hoc sign with '-' identity (no certificate needed)
+          # LiveContainer and sideloading tools need at least a pseudo-signature
+          /usr/bin/codesign --force --deep --sign - "$APP"
+          echo "=== Signature info ==="
+          codesign -dvv "$APP" 2>&1 || true
 
       - name: Package IPA
         run: |
+          APP="build/Build/Products/Release-iphoneos/BlockMash.app"
           mkdir -p export/Payload
-          cp -r build/Build/Products/Release-iphoneos/BlockMash.app export/Payload/
+          cp -r "$APP" export/Payload/
           cd export
           zip -r ../BlockMash.ipa Payload
           cd ..
           ls -lh BlockMash.ipa
+          echo "=== IPA contents ==="
+          unzip -l BlockMash.ipa | head -20
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
@@ -83,6 +113,7 @@ jobs:
             ## NXLauncher v2.0.0 — Hybrid Launcher for iOS
 
             Unsigned IPA for sideloading via AltStore, SideStore, LiveContainer, or similar.
+            Binary patched MH_EXECUTE→MH_DYLIB + ad-hoc signed for LiveContainer compatibility.
             Target: iPhone 16 Pro / A18 Pro / iOS 27 / Metal 3
 
             ### Features
@@ -101,9 +132,9 @@ jobs:
 
             ### Installation
             1. Download `BlockMash.ipa`
-            2. Sideload with your preferred tool (AltStore, SideStore, etc.)
-            3. Import prod.keys via Import tab
-            4. Import game files (NSP/XCI) from Files app
+            2. Open LiveContainer → import IPA
+            3. **Delete any old BlockMash entry first** before importing
+            4. Launch from LiveContainer
           files: BlockMash.ipa
           draft: false
           prerelease: true
