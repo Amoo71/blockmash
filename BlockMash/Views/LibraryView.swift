@@ -85,6 +85,7 @@ struct GameRowView: View {
     let game: GameEntry
 
     var body: some View {
+        let missing = !game.fileExists
         HStack(spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 10)
@@ -100,7 +101,7 @@ struct GameRowView: View {
                     Text(game.title)
                         .font(.body.bold())
                         .lineLimit(1)
-                    if !game.fileExists {
+                    if missing {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(.orange)
                             .font(.caption)
@@ -109,7 +110,7 @@ struct GameRowView: View {
                 HStack(spacing: 8) {
                     Label(game.fileType.rawValue, systemImage: game.fileType.icon)
                     Text(game.formattedSize)
-                    if !game.fileExists {
+                    if missing {
                         Text("File missing")
                             .foregroundStyle(.orange)
                     }

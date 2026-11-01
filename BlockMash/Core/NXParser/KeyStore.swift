@@ -14,20 +14,19 @@ struct KeyStore {
         let hasAccess = url.startAccessingSecurityScopedResource()
         defer { if hasAccess { url.stopAccessingSecurityScopedResource() } }
 
-        let content = try String(contentsOf: url, encoding: .utf8)
-        return parse(content: content)
+        let data = try Data(contentsOf: url)
+        return parse(content: String(decoding: data, as: UTF8.self))
     }
 
     static func loadFromDocuments() -> KeyStore? {
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let keysFile = docs.appendingPathComponent("prod.keys")
+        let keysFile = AppFolders.keysFile
         guard FileManager.default.fileExists(atPath: keysFile.path) else { return nil }
         return try? load(from: keysFile)
     }
 
     static func parse(content: String) -> KeyStore {
         var store = KeyStore()
-        let lines = content.components(separatedBy: .newlines)
+        let lines = content.replacingOccurrences(of: "\u{FEFF}", with: "").components(separatedBy: .newlines)
 
         for line in lines {
             let trimmed = line.trimmingCharacters(in: .whitespaces)

@@ -22,106 +22,98 @@ actor GameScanner {
     static let shared = GameScanner()
 
     func scan(url: URL) async throws -> ScanResult {
-        let ext = url.pathExtension.lowercased()
-
         let hasAccess = url.startAccessingSecurityScopedResource()
         defer { if hasAccess { url.stopAccessingSecurityScopedResource() } }
 
-        let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
-        let fileSize = (attrs[.size] as? Int64) ?? 0
-
-        switch ext {
-        case "nsp", "nsz":
-            return try scanNSP(url: url, fileSize: fileSize, compressed: ext == "nsz")
-        case "xci", "xcz":
-            return try scanXCI(url: url, fileSize: fileSize, compressed: ext == "xcz")
-        default:
-            throw ScanError.unsupportedFormat(ext)
+        guard let fileType = GameFileType.from(extension: url.pathExtension) else {
+            throw ScanError.unsupportedFormat(url.pathExtension)
         }
-    }
+        let fileSize = Int64((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
 
-    private func scanNSP(url: URL, fileSize: Int64, compressed: Bool) throws -> ScanResult {
-        let header = try PFS0Parser.parseFromFile(url: url)
-        let ncas = PFS0Parser.ncaEntries(from: header)
-        let titleId = ncas.compactMap(\.titleId).first ?? titleIdFromFilename(url)
-        let contentType = classifyContent(titleId: titleId)
-        let fileType: GameFileType = compressed ? .nsz : .nsp
+        let entryNames: [String]
+        let contentNCASizes: [UInt64]
+        switch fileType {
+        case .nsp, .nsz:
+            let header = try PFS0Parser.parseFromFile(url: url)
+            entryNames = header.entries.map(\.name)
+            contentNCASizes = PFS0Parser.ncaEntries(from: header).filter { !$0.isMeta }.map(\.size)
+        case .xci, .xcz:
+            let header = try XCIParser.parseHeader(url: url)
+            let secure = XCIParser.securePartition(from: header)
+            entryNames = secure?.files.map(\.name) ?? []
+            contentNCASizes = (secure.map { XCIParser.ncaFiles(from: $0) } ?? [])
+                .filter { !$0.name.lowercased().contains(".cnmt.") }
+                .map(\.size)
+        }
 
+        let fileName = url.lastPathComponent
+        let titleId = Self.titleId(fileName: fileName, entryNames: entryNames)
         return ScanResult(
-            title: cleanTitle(url.deletingPathExtension().lastPathComponent),
+            title: Self.cleanTitle(url.deletingPathExtension().lastPathComponent),
             titleId: titleId,
-            version: "0",
+            version: Self.version(fileName: fileName),
             fileType: fileType,
             fileSize: fileSize,
-            ncaCount: ncas.count,
-            hasProgramNCA: ncas.contains { $0.contentType == .program },
-            hasControlNCA: ncas.contains { $0.contentType == .control },
-            contentType: contentType
+            ncaCount: entryNames.filter(NCAInfo.isNCAName).count,
+            // Without decrypting NCA headers the program NCA is simply the content NCA that exists;
+            // a second content NCA is almost always the control (icon/name) NCA.
+            hasProgramNCA: !contentNCASizes.isEmpty,
+            hasControlNCA: contentNCASizes.count >= 2,
+            contentType: Self.classify(titleId)
         )
     }
 
-    private func scanXCI(url: URL, fileSize: Int64, compressed: Bool) throws -> ScanResult {
-        let header = try XCIParser.parseHeader(url: url)
-        let secure = XCIParser.securePartition(from: header)
-        let ncaFiles = secure.map { XCIParser.ncaFiles(from: $0) } ?? []
-        let fileType: GameFileType = compressed ? .xcz : .xci
-
-        let titleId = ncaFiles.compactMap { entry -> String? in
-            let hex = entry.name.prefix(32).filter { $0.isHexDigit }
-            return hex.count >= 16 ? String(hex.prefix(16)).lowercased() : nil
-        }.first ?? titleIdFromFilename(url)
-
-        return ScanResult(
-            title: cleanTitle(url.deletingPathExtension().lastPathComponent),
-            titleId: titleId,
-            version: "0",
-            fileType: fileType,
-            fileSize: fileSize,
-            ncaCount: ncaFiles.count,
-            hasProgramNCA: true,
-            hasControlNCA: true,
-            contentType: .base
-        )
-    }
-
-    private func titleIdFromFilename(_ url: URL) -> String {
-        let name = url.deletingPathExtension().lastPathComponent
-        let pattern = /\[([0-9A-Fa-f]{16})\]/
-        if let match = name.firstMatch(of: pattern) {
+    /// Title ID from a "[0100…]" tag in the file name, else from a ticket (rights ID = title ID + key generation).
+    static func titleId(fileName: String, entryNames: [String]) -> String {
+        if let match = fileName.firstMatch(of: /\[([0-9A-Fa-f]{16})\]/) {
             return String(match.1).lowercased()
+        }
+        for name in entryNames where name.lowercased().hasSuffix(".tik") {
+            let hex = name.prefix(16)
+            if hex.count == 16, hex.allSatisfy(\.isHexDigit) {
+                return hex.lowercased()
+            }
         }
         return ""
     }
 
-    private func classifyContent(titleId: String) -> ScanResult.ContentType {
-        guard titleId.count == 16 else { return .base }
-        let suffix = String(titleId.suffix(4))
-        if suffix == "0800" { return .update }
-        let lastDigit = Int(suffix, radix: 16) ?? 0
-        if lastDigit > 0 && suffix != "0000" && suffix != "0800" { return .dlc }
+    static func version(fileName: String) -> String {
+        if let match = fileName.firstMatch(of: /\[v(\d+)\]/) {
+            return String(match.1)
+        }
+        return "0"
+    }
+
+    /// Base titles end in 0x000 (low 13 bits clear), updates are base + 0x800, DLC is base + 0x1000 + index.
+    static func classify(_ titleId: String) -> ScanResult.ContentType {
+        guard let value = UInt64(titleId, radix: 16) else { return .base }
+        let low = value & 0x1FFF
+        if low == 0x800 { return .update }
+        if low > 0x1000 { return .dlc }
         return .base
     }
 
-    private func cleanTitle(_ name: String) -> String {
-        var clean = name
-        let patterns = [/\[[^\]]*\]/, /\([^)]*\)/]
-        for pattern in patterns {
-            clean = clean.replacing(pattern, with: "")
-        }
-        return clean.trimmingCharacters(in: .whitespacesAndNewlines)
+    static func baseTitleId(_ titleId: String) -> String? {
+        guard let value = UInt64(titleId, radix: 16) else { return nil }
+        return String(format: "%016llx", value & ~UInt64(0x1FFF))
+    }
+
+    static func cleanTitle(_ name: String) -> String {
+        let stripped = name
+            .replacing(/\[[^\]]*\]/, with: "")
+            .replacing(/\([^)]*\)/, with: "")
+            .replacingOccurrences(of: "_", with: " ")
+        let clean = stripped.split(separator: " ").joined(separator: " ")
+        return clean.isEmpty ? name : clean
     }
 }
 
 enum ScanError: Error, LocalizedError {
-    case accessDenied
     case unsupportedFormat(String)
-    case corruptFile
 
     var errorDescription: String? {
         switch self {
-        case .accessDenied: return "Cannot access file"
         case .unsupportedFormat(let ext): return "Unsupported format: .\(ext)"
-        case .corruptFile: return "File appears to be corrupt"
         }
     }
 }

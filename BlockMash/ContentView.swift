@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct ContentView: View {
+    @EnvironmentObject var library: GameLibrary
+    @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab = 0
 
     var body: some View {
@@ -30,5 +32,15 @@ struct ContentView: View {
                 .tag(3)
         }
         .tint(.purple)
+        .task { await library.scanAppFolder() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                Task { await library.scanAppFolder() }
+            }
+        }
+        .onOpenURL { url in
+            selectedTab = 1
+            library.importOpened(url)
+        }
     }
 }

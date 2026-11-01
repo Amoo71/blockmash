@@ -1,207 +1,162 @@
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 struct ImportView: View {
     @EnvironmentObject var library: GameLibrary
     @State private var activePicker: PickerKind?
-    @State private var statusLines: [StatusLine] = []
-    @State private var isWorking = false
-
-    private let gameType = UTType("com.blockmash.game-rom") ?? .data
 
     enum PickerKind: Identifiable {
         case games, keys
         var id: Self { self }
     }
 
-    struct StatusLine: Identifiable {
-        let id = UUID()
-        let kind: Kind
-        let text: String
-        enum Kind { case info, success, error, progress }
-    }
-
     var body: some View {
         NavigationStack {
             List {
+                if AppFolders.isLiveContainer { pickerTip }
                 keysSection
-                importSection
-                if !statusLines.isEmpty { statusSection }
+                gamesSection
+                if !library.importLog.isEmpty { activitySection }
             }
             .navigationTitle("Import")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        Task { await library.scanAppFolder(manual: true) }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                }
+            }
             .sheet(item: $activePicker) { kind in
                 DocumentPicker(
-                    types: types(for: kind),
+                    types: kind == .games ? [UTType("com.blockmash.game-rom") ?? .data, .data] : [.data],
                     allowsMultiple: kind == .games,
                     onPick: { urls in
                         activePicker = nil
                         switch kind {
-                        case .games: processGames(urls)
-                        case .keys: processKeys(urls)
+                        case .games:
+                            library.importPickedGames(urls)
+                        case .keys:
+                            if let url = urls.first { library.importKeys(from: url) }
                         }
                     },
-                    onCancel: {
-                        activePicker = nil
-                        log(.info, "Picker cancelled")
-                    }
+                    onCancel: { activePicker = nil }
                 )
                 .ignoresSafeArea()
             }
         }
     }
 
-    private func types(for kind: PickerKind) -> [UTType] {
-        switch kind {
-        case .games: return [gameType, .data]
-        case .keys: return [.data]
-        }
-    }
-
-    private var statusSection: some View {
+    private var pickerTip: some View {
         Section {
-            ForEach(statusLines.reversed()) { line in
-                HStack(alignment: .top, spacing: 10) {
-                    icon(for: line.kind).frame(width: 20)
-                    Text(line.text)
-                        .font(.caption)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
+            Label {
+                Text("If **Open** in the file picker does nothing: in LiveContainer long-press BlockMash → Settings → turn on **Fix File Picker**. Paste and the Games folder below always work.")
+                    .font(.footnote)
+            } icon: {
+                Image(systemName: "lightbulb.fill")
+                    .foregroundStyle(.yellow)
             }
-            if !statusLines.isEmpty && !isWorking {
-                Button("Clear log") {
-                    withAnimation { statusLines = [] }
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-        } header: {
-            HStack {
-                Text("Status")
-                Spacer()
-                if isWorking { ProgressView().scaleEffect(0.8) }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func icon(for kind: StatusLine.Kind) -> some View {
-        switch kind {
-        case .info: Image(systemName: "info.circle").foregroundStyle(.blue)
-        case .success: Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-        case .error: Image(systemName: "xmark.octagon.fill").foregroundStyle(.red)
-        case .progress: ProgressView().scaleEffect(0.6)
         }
     }
 
     private var keysSection: some View {
         Section {
-            HStack {
+            HStack(spacing: 12) {
                 Image(systemName: library.keysImported ? "checkmark.shield.fill" : "xmark.shield")
-                    .foregroundStyle(library.keysImported ? .green : .red)
                     .font(.title2)
+                    .foregroundStyle(library.keysImported ? .green : .red)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(library.keysImported ? "prod.keys loaded" : "Keys required")
+                    Text(library.keysImported ? "prod.keys loaded" : "prod.keys missing")
                         .font(.body.bold())
-                    if let keyStore = KeyStore.loadFromDocuments() {
-                        Text("\(keyStore.keyCount) keys (\(keyStore.titleKeyCount) title, \(keyStore.keyAreaKeyCount) area)")
+                    if let summary = library.keySummary {
+                        Text(summary)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
-                Spacer()
             }
             Button {
                 activePicker = .keys
             } label: {
-                Label("Import prod.keys", systemImage: "key.fill")
+                Label("Choose File…", systemImage: "folder")
             }
-            .disabled(isWorking)
+            Button {
+                library.pasteKeys()
+            } label: {
+                Label("Paste from Clipboard", systemImage: "doc.on.clipboard")
+            }
         } header: {
-            Text("Encryption Keys")
+            Text("Keys")
         } footer: {
-            Text("Required to decrypt game files. Your keys stay on-device.")
+            Text("To paste: in the Files app long-press prod.keys → Copy, then tap Paste here.")
         }
     }
 
-    private var importSection: some View {
+    private var gamesSection: some View {
         Section {
             Button {
                 activePicker = .games
             } label: {
-                HStack {
-                    Image(systemName: "doc.badge.plus")
-                        .font(.title2)
-                        .foregroundStyle(.purple)
-                    VStack(alignment: .leading) {
-                        Text("Import Game Files")
-                            .font(.body.bold())
-                        Text("NSP, NSZ, XCI, XCZ")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                Label("Choose Files…", systemImage: "folder")
             }
-            .disabled(isWorking)
+            Button {
+                library.pasteGames()
+            } label: {
+                Label("Paste from Clipboard", systemImage: "doc.on.clipboard")
+            }
+            Button {
+                openGamesFolder()
+            } label: {
+                Label("Open Games Folder in Files", systemImage: "arrow.up.forward.app")
+            }
         } header: {
-            Text("Add Games")
+            Text("Games")
         } footer: {
-            Text("Files are scanned for metadata. Originals stay in place.")
+            Text("Best for big files: in the Files app move your games (and prod.keys) into \(AppFolders.gamesFolderHint). They're added automatically when you come back.")
         }
     }
 
-    private func log(_ kind: StatusLine.Kind, _ text: String) {
-        statusLines.append(StatusLine(kind: kind, text: text))
-    }
-
-    private func processGames(_ urls: [URL]) {
-        log(.info, "Picked \(urls.count) file(s)")
-        isWorking = true
-        Task { @MainActor in
-            var imported = 0
-            for url in urls {
-                log(.progress, "Scanning \(url.lastPathComponent)…")
-                do {
-                    let _ = try await library.importFile(url: url)
-                    imported += 1
-                    log(.success, "Imported \(url.lastPathComponent)")
-                } catch {
-                    log(.error, "\(url.lastPathComponent): \(error.localizedDescription)")
+    private var activitySection: some View {
+        Section {
+            ForEach(library.importLog.reversed()) { line in
+                HStack(alignment: .top, spacing: 10) {
+                    icon(for: line.kind)
+                        .frame(width: 20)
+                    Text(line.text)
+                        .font(.caption)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            log(.success, "Done — \(imported)/\(urls.count) imported")
-            isWorking = false
+        } header: {
+            HStack {
+                Text("Activity")
+                Spacer()
+                Button("Clear") { library.clearLog() }
+                    .font(.caption)
+            }
         }
     }
 
-    private func processKeys(_ urls: [URL]) {
-        guard let url = urls.first else {
-            log(.error, "No file was selected")
-            return
+    @ViewBuilder
+    private func icon(for kind: ImportLogLine.Kind) -> some View {
+        switch kind {
+        case .info: Image(systemName: "info.circle").foregroundStyle(.blue)
+        case .success: Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+        case .error: Image(systemName: "xmark.octagon.fill").foregroundStyle(.red)
+        case .progress: Image(systemName: "arrow.triangle.2.circlepath").foregroundStyle(.secondary)
         }
-        log(.info, "Picked keys: \(url.lastPathComponent)")
-        isWorking = true
-        Task { @MainActor in
-            defer { isWorking = false }
+    }
 
-            let hasAccess = url.startAccessingSecurityScopedResource()
-            defer { if hasAccess { url.stopAccessingSecurityScopedResource() } }
-
-            log(.progress, "Access: \(hasAccess)")
-
-            let dest = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("prod.keys")
-            try? FileManager.default.removeItem(at: dest)
-
-            do {
-                let data = try Data(contentsOf: url)
-                try data.write(to: dest)
-                log(.success, "Copied \(data.count) bytes to Documents/prod.keys")
-
-                let keyStore = try KeyStore.load(from: dest)
-                library.setKeysImported(true)
-                log(.success, "Loaded \(keyStore.keyCount) keys (\(keyStore.titleKeyCount) title, \(keyStore.keyAreaKeyCount) area)")
-            } catch {
-                log(.error, "Failed: \(error.localizedDescription)")
+    private func openGamesFolder() {
+        AppFolders.ensureFolders()
+        guard let url = AppFolders.gamesFolderFilesURL else { return }
+        UIApplication.shared.open(url, options: [:]) { opened in
+            if !opened {
+                Task { @MainActor in
+                    library.log(.info, "Couldn't open Files automatically. Go to \(AppFolders.gamesFolderHint)")
+                }
             }
         }
     }

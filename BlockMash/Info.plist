@@ -44,6 +44,8 @@
     </array>
     <key>UISupportsDocumentBrowser</key>
     <true/>
+    <key>UIFileSharingEnabled</key>
+    <true/>
     <key>LSSupportsOpeningDocumentsInPlace</key>
     <true/>
     <key>UTImportedTypeDeclarations</key>
@@ -104,10 +106,9 @@
             <key>LSItemContentTypes</key>
             <array>
                 <string>com.blockmash.prod-keys</string>
-                <string>public.plain-text</string>
             </array>
             <key>LSHandlerRank</key>
-            <string>Alternate</string>
+            <string>Owner</string>
         </dict>
     </array>
 </dict>
