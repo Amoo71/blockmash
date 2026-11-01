@@ -3,6 +3,7 @@ import SwiftUI
 struct GameDetailView: View {
     @EnvironmentObject var library: GameLibrary
     @StateObject private var launcher = GameLauncher()
+    @State private var showAdvanced = false
     let game: GameEntry
 
     init(game: GameEntry) {
@@ -16,7 +17,7 @@ struct GameDetailView: View {
             detailsSection
             if !game.updates.isEmpty { updatesSection }
             if !game.dlc.isEmpty { dlcSection }
-            ncaSection
+            advancedSection
         }
         .navigationTitle(game.title)
         .navigationBarTitleDisplayMode(.inline)
@@ -30,37 +31,28 @@ struct GameDetailView: View {
     private var isRunning: Binding<Bool> {
         Binding(
             get: { launcher.state == .running },
-            set: { newValue in
-                if !newValue { launcher.stop() }
-            }
+            set: { if !$0 { launcher.stop() } }
         )
     }
 
     private var headerSection: some View {
         Section {
-            VStack(spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 20)
-                        .fill(colorForGame(game))
-                        .frame(height: 140)
-                    VStack(spacing: 6) {
-                        Text(String(game.title.prefix(2)).uppercased())
-                            .font(.system(size: 44, weight: .bold))
-                            .foregroundStyle(.white)
-                        Text(game.title)
-                            .font(.subheadline.bold())
-                            .foregroundStyle(.white.opacity(0.9))
-                            .lineLimit(2)
-                            .multilineTextAlignment(.center)
-                    }
-                    .padding(.horizontal)
+            ZStack {
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(colorForGame(game))
+                    .frame(height: 120)
+                VStack(spacing: 4) {
+                    Text(String(game.title.prefix(2)).uppercased())
+                        .font(.system(size: 36, weight: .bold))
+                        .foregroundStyle(.white)
                 }
             }
         }
         .listRowBackground(Color.clear)
-        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
     }
 
+    @ViewBuilder
     private var launchSection: some View {
         Section {
             switch launcher.state {
@@ -68,7 +60,7 @@ struct GameDetailView: View {
                 Button {
                     Task { await launcher.prepareLaunch(game: game) }
                 } label: {
-                    Label("Prepare Launch", systemImage: "play.circle.fill")
+                    Label("Launch", systemImage: "play.fill")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 4)
                 }
@@ -78,18 +70,14 @@ struct GameDetailView: View {
 
             case .scanning, .verifyingKeys, .loadingNCAs:
                 HStack {
-                    ProgressView()
-                    Text(stateDescription)
-                        .foregroundStyle(.secondary)
+                    ProgressView().padding(.trailing, 6)
+                    Text(stateDescription).foregroundStyle(.secondary)
                 }
 
             case .compilingShaders(let progress):
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Compiling shaders...")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    ProgressView(value: progress)
-                        .tint(.purple)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Compiling shaders").font(.caption).foregroundStyle(.secondary)
+                    ProgressView(value: progress).tint(.purple)
                 }
 
             case .ready:
@@ -97,7 +85,7 @@ struct GameDetailView: View {
                     launcher.launch()
                     library.markPlayed(game)
                 } label: {
-                    Label("Launch Game", systemImage: "play.fill")
+                    Label("Start", systemImage: "play.fill")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 4)
                 }
@@ -112,103 +100,100 @@ struct GameDetailView: View {
                 }
 
             case .error(let msg):
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("Error", systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.red)
-                    Text(msg)
+                VStack(alignment: .leading, spacing: 6) {
+                    Label(msg, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
                     Button("Retry") {
                         Task { await launcher.prepareLaunch(game: game) }
                     }
+                    .font(.caption)
                 }
-            }
-        } footer: {
-            if !game.fileExists {
-                Text("Game file not found. The original file may have been moved or deleted.")
             }
         }
     }
 
     private var detailsSection: some View {
-        Section("Details") {
-            LabeledContent("File Type", value: game.fileType.rawValue)
+        Section {
+            LabeledContent("Format", value: game.fileType.rawValue)
             LabeledContent("Size", value: game.formattedSize)
             if !game.titleId.isEmpty {
                 LabeledContent("Title ID") {
                     Text(game.titleId).font(.caption.monospaced())
                 }
             }
-            LabeledContent("Version", value: game.version)
-            LabeledContent("Added", value: game.dateAdded.formatted(date: .abbreviated, time: .shortened))
             if let lastPlayed = game.lastPlayed {
-                LabeledContent("Last Played", value: lastPlayed.formatted(date: .abbreviated, time: .shortened))
-            }
-            if game.playTime > 0 {
-                LabeledContent("Play Time", value: game.formattedPlayTime)
+                LabeledContent("Last played", value: lastPlayed.formatted(.relative(presentation: .named)))
             }
         }
     }
 
     private var updatesSection: some View {
-        Section("Updates (\(game.updates.count))") {
+        Section("Updates") {
             ForEach(game.updates) { update in
                 HStack {
                     Label("v\(update.version)", systemImage: "arrow.up.circle.fill")
                         .foregroundStyle(.blue)
                     Spacer()
                     Text(ByteCountFormatter.string(fromByteCount: update.fileSize, countStyle: .file))
-                        .foregroundStyle(.secondary)
                         .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
     }
 
     private var dlcSection: some View {
-        Section("DLC (\(game.dlc.count))") {
+        Section("DLC") {
             ForEach(game.dlc) { dlc in
                 HStack {
                     Label(dlc.name, systemImage: "plus.circle.fill")
                         .foregroundStyle(.green)
                     Spacer()
                     Text(ByteCountFormatter.string(fromByteCount: dlc.fileSize, countStyle: .file))
-                        .foregroundStyle(.secondary)
                         .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
     }
 
-    private var ncaSection: some View {
-        Section("NCA Info") {
-            LabeledContent("NCA Count", value: "\(game.ncaCount)")
-            HStack {
-                Text("Program NCA")
-                Spacer()
-                Image(systemName: game.hasProgramNCA ? "checkmark.circle.fill" : "xmark.circle")
-                    .foregroundStyle(game.hasProgramNCA ? .green : .red)
-            }
-            HStack {
-                Text("Control NCA")
-                Spacer()
-                Image(systemName: game.hasControlNCA ? "checkmark.circle.fill" : "xmark.circle")
-                    .foregroundStyle(game.hasControlNCA ? .green : .red)
+    private var advancedSection: some View {
+        Section {
+            DisclosureGroup(isExpanded: $showAdvanced) {
+                LabeledContent("NCA count", value: "\(game.ncaCount)")
+                HStack {
+                    Text("Program NCA")
+                    Spacer()
+                    Image(systemName: game.hasProgramNCA ? "checkmark.circle.fill" : "xmark.circle")
+                        .foregroundStyle(game.hasProgramNCA ? .green : .red)
+                }
+                HStack {
+                    Text("Control NCA")
+                    Spacer()
+                    Image(systemName: game.hasControlNCA ? "checkmark.circle.fill" : "xmark.circle")
+                        .foregroundStyle(game.hasControlNCA ? .green : .red)
+                }
+                LabeledContent("Added", value: game.dateAdded.formatted(date: .abbreviated, time: .omitted))
+            } label: {
+                Label("Advanced", systemImage: "wrench.and.screwdriver")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
         }
     }
 
     private var stateDescription: String {
         switch launcher.state {
-        case .scanning: return "Scanning game file..."
-        case .verifyingKeys: return "Verifying encryption keys..."
-        case .loadingNCAs: return "Loading NCAs..."
+        case .scanning: return "Scanning"
+        case .verifyingKeys: return "Verifying keys"
+        case .loadingNCAs: return "Loading NCAs"
         default: return ""
         }
     }
 
     private func colorForGame(_ game: GameEntry) -> Color {
-        let colors: [Color] = [.purple, .blue, .indigo, .pink, .orange, .teal]
+        let colors: [Color] = [.purple, .blue, .indigo, .pink, .orange, .teal, .mint, .cyan]
         let hash = abs(game.title.hashValue)
         return colors[hash % colors.count]
     }

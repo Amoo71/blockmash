@@ -113,4 +113,34 @@ class ControllerManager: ObservableObject {
         virtualController = nil
         isVirtualControllerActive = false
     }
+
+    func applyTouch(id: TouchButtonID, pressed: Bool) {
+        var state = buttonState
+        switch id {
+        case .a: swapAB ? (state.b = pressed) : (state.a = pressed)
+        case .b: swapAB ? (state.a = pressed) : (state.b = pressed)
+        case .x: state.x = pressed
+        case .y: state.y = pressed
+        case .l: state.l = pressed
+        case .r: state.r = pressed
+        case .zl: state.zl = pressed
+        case .zr: state.zr = pressed
+        case .plus: state.plus = pressed
+        case .minus: state.minus = pressed
+        case .home: state.home = pressed
+        case .dpadUp: state.dpadUp = pressed
+        case .dpadDown: state.dpadDown = pressed
+        case .dpadLeft: state.dpadLeft = pressed
+        case .dpadRight: state.dpadRight = pressed
+        case .leftStick, .rightStick: break
+        }
+        buttonState = state
+    }
+
+    func applyStick(id: TouchButtonID, value: SIMD2<Float>) {
+        var state = buttonState
+        if id == .leftStick { state.leftStick = value }
+        if id == .rightStick { state.rightStick = value }
+        buttonState = state
+    }
 }

@@ -5,24 +5,37 @@ struct GameRunningView: View {
     let launcher: GameLauncher
     let onExit: () -> Void
 
+    @EnvironmentObject var touchLayout: TouchLayout
+    @EnvironmentObject var controllerManager: ControllerManager
+
     @State private var animationPhase: Double = 0
     @State private var fpsTick = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
     @State private var showingOverlay = true
     @State private var elapsedSeconds: Int = 0
+    @State private var dummySelection: TouchButtonID? = nil
 
     var body: some View {
         ZStack {
             animatedBackground
                 .ignoresSafeArea()
 
+            // Touch controller overlay (only when no physical controller).
+            if controllerManager.connectedControllers.isEmpty {
+                TouchOverlayView(
+                    layout: touchLayout,
+                    controllerManager: controllerManager,
+                    editable: false,
+                    selectedID: $dummySelection
+                )
+                .allowsHitTesting(true)
+                .ignoresSafeArea()
+            }
+
             if showingOverlay {
-                overlay
+                overlay.allowsHitTesting(true)
             }
         }
         .statusBarHidden()
-        .onTapGesture {
-            withAnimation { showingOverlay.toggle() }
-        }
         .onReceive(fpsTick) { _ in
             launcher.simulateFrameTick()
             elapsedSeconds += 1
@@ -59,41 +72,23 @@ struct GameRunningView: View {
     private var overlay: some View {
         VStack {
             HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(game.title)
-                        .font(.title3.bold())
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                    HStack(spacing: 10) {
-                        badge("\(Int(launcher.fps)) FPS", icon: "speedometer")
-                        badge(formattedElapsed, icon: "clock.fill")
-                    }
+                HStack(spacing: 8) {
+                    badge("\(Int(launcher.fps)) FPS", icon: "speedometer")
+                    badge(formattedElapsed, icon: "clock.fill")
                 }
                 Spacer()
                 Button {
                     onExit()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 36))
-                        .foregroundStyle(.white, .black.opacity(0.4))
+                        .font(.system(size: 32))
+                        .foregroundStyle(.white, .black.opacity(0.5))
                 }
             }
-            .padding()
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 20))
-            .padding()
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
 
             Spacer()
-
-            VStack(spacing: 6) {
-                Text("Tap screen to toggle overlay")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.7))
-                Text("Rendering • Metal 3 • \(game.titleId.isEmpty ? "no title id" : game.titleId)")
-                    .font(.caption2.monospaced())
-                    .foregroundStyle(.white.opacity(0.5))
-            }
-            .padding(.bottom, 32)
         }
         .transition(.opacity)
     }

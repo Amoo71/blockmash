@@ -21,11 +21,9 @@ struct ImportView: View {
     var body: some View {
         NavigationStack {
             List {
-                if !statusLines.isEmpty { statusSection }
                 keysSection
                 importSection
-                formatsSection
-                storageSection
+                if !statusLines.isEmpty { statusSection }
             }
             .navigationTitle("Import")
             .fileImporter(
@@ -134,33 +132,6 @@ struct ImportView: View {
         }
     }
 
-    private var formatsSection: some View {
-        Section("Supported Formats") {
-            ForEach(GameFileType.allCases, id: \.self) { type in
-                HStack {
-                    Image(systemName: type.icon)
-                        .foregroundStyle(.purple)
-                        .frame(width: 30)
-                    VStack(alignment: .leading) {
-                        Text(type.rawValue).font(.body.bold())
-                        Text(descriptionFor(type))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-        }
-    }
-
-    private var storageSection: some View {
-        Section("Library Stats") {
-            LabeledContent("Games", value: "\(library.games.count)")
-            LabeledContent("Updates", value: "\(library.games.flatMap(\.updates).count)")
-            LabeledContent("DLC", value: "\(library.games.flatMap(\.dlc).count)")
-            LabeledContent("Total Size", value: ByteCountFormatter.string(fromByteCount: library.totalSize, countStyle: .file))
-        }
-    }
-
     private func log(_ kind: StatusLine.Kind, _ text: String) {
         statusLines.append(StatusLine(kind: kind, text: text))
     }
@@ -228,12 +199,4 @@ struct ImportView: View {
         }
     }
 
-    private func descriptionFor(_ type: GameFileType) -> String {
-        switch type {
-        case .nsp: return "Nintendo Submission Package (eShop)"
-        case .nsz: return "Compressed NSP (smaller download)"
-        case .xci: return "NX Game Card Image (cartridge dump)"
-        case .xcz: return "Compressed XCI"
-        }
-    }
 }

@@ -2,34 +2,32 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject var library: GameLibrary
+    @EnvironmentObject var touchLayout: TouchLayout
     @AppStorage("engineRenderer") private var renderer = EngineConfig.RendererBackend.metal.rawValue
     @AppStorage("engineResolution") private var resolution = EngineConfig.ResolutionScale.native.rawValue
     @AppStorage("engineCPUAccuracy") private var cpuAccuracy = EngineConfig.CPUAccuracy.auto.rawValue
     @AppStorage("engineMemoryLayout") private var memoryLayout = EngineConfig.MemoryLayout.extended.rawValue
-    @AppStorage("asyncShaders") private var asyncShaders = true
     @AppStorage("vsync") private var vsync = true
     @AppStorage("maxFPS") private var maxFPS = 60
     @AppStorage("dockedMode") private var dockedMode = false
     @AppStorage("useNCE") private var useNCE = true
+
     @State private var shaderCacheSize: Int64 = 0
-    @State private var showingClearAlert = false
-    @State private var showingClearGamesAlert = false
-    @State private var showingClearKeysAlert = false
-    @State private var showingAbout = false
+    @State private var showingClearShaders = false
+    @State private var showingClearGames = false
+    @State private var showingClearKeys = false
 
     var body: some View {
         NavigationStack {
             List {
                 graphicsSection
-                cpuSection
                 performanceSection
-                cacheSection
+                touchSection
                 dataSection
-                aboutSection
             }
             .navigationTitle("Settings")
             .task { await refreshCacheSize() }
-            .alert("Clear Shader Cache?", isPresented: $showingClearAlert) {
+            .alert("Clear shader cache?", isPresented: $showingClearShaders) {
                 Button("Cancel", role: .cancel) {}
                 Button("Clear", role: .destructive) {
                     Task {
@@ -37,22 +35,17 @@ struct SettingsView: View {
                         await refreshCacheSize()
                     }
                 }
-            } message: {
-                Text("All cached shaders will be removed. Games will recompile shaders on next launch.")
             }
-            .alert("Remove all games?", isPresented: $showingClearGamesAlert) {
+            .alert("Remove all games?", isPresented: $showingClearGames) {
                 Button("Cancel", role: .cancel) {}
                 Button("Remove", role: .destructive) { library.removeAllGames() }
             } message: {
                 Text("Clears the library index. Original files on your device are not deleted.")
             }
-            .alert("Delete prod.keys?", isPresented: $showingClearKeysAlert) {
+            .alert("Delete prod.keys?", isPresented: $showingClearKeys) {
                 Button("Cancel", role: .cancel) {}
                 Button("Delete", role: .destructive) { library.clearKeys() }
-            } message: {
-                Text("Removes your imported encryption keys. You'll need to re-import prod.keys to launch games.")
             }
-            .sheet(isPresented: $showingAbout) { aboutView }
         }
     }
 
@@ -68,125 +61,67 @@ struct SettingsView: View {
                     Text($0.rawValue).tag($0.rawValue)
                 }
             }
-            Toggle("Async Shader Compilation", isOn: $asyncShaders)
             Toggle("VSync", isOn: $vsync)
-        }
-    }
-
-    private var cpuSection: some View {
-        Section("CPU") {
-            Picker("Accuracy", selection: $cpuAccuracy) {
-                ForEach(EngineConfig.CPUAccuracy.allCases, id: \.rawValue) {
-                    Text($0.rawValue).tag($0.rawValue)
-                }
-            }
-            Picker("Memory Layout", selection: $memoryLayout) {
-                ForEach(EngineConfig.MemoryLayout.allCases, id: \.rawValue) {
-                    Text($0.rawValue).tag($0.rawValue)
-                }
-            }
-            Toggle("NCE (Native Code Execution)", isOn: $useNCE)
         }
     }
 
     private var performanceSection: some View {
         Section("Performance") {
-            Picker("Max FPS", selection: $maxFPS) {
+            Picker("Target FPS", selection: $maxFPS) {
                 Text("30").tag(30)
                 Text("60").tag(60)
                 Text("120").tag(120)
             }
-            Toggle("Docked Mode", isOn: $dockedMode)
+            Picker("CPU", selection: $cpuAccuracy) {
+                ForEach(EngineConfig.CPUAccuracy.allCases, id: \.rawValue) {
+                    Text($0.rawValue).tag($0.rawValue)
+                }
+            }
+            Toggle("NCE", isOn: $useNCE)
+            Toggle("Docked mode", isOn: $dockedMode)
         }
     }
 
-    private var cacheSection: some View {
-        Section("Shader Cache") {
-            LabeledContent("Cache Size", value: ByteCountFormatter.string(fromByteCount: shaderCacheSize, countStyle: .file))
-            Button(role: .destructive) {
-                showingClearAlert = true
-            } label: {
-                Label("Clear Shader Cache", systemImage: "trash")
+    private var touchSection: some View {
+        Section("Touch Overlay") {
+            HStack {
+                Image(systemName: "circle.lefthalf.filled")
+                    .foregroundStyle(.secondary)
+                Text("Overall opacity")
+                Spacer()
+                Text("\(Int(touchLayout.overallOpacity * 100))%")
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
             }
+            Slider(value: $touchLayout.overallOpacity, in: 0.1...1.0)
+                .onChange(of: touchLayout.overallOpacity) { _, _ in touchLayout.save() }
         }
     }
 
     private var dataSection: some View {
-        Section("Library") {
+        Section("Data") {
             LabeledContent("Games", value: "\(library.games.count)")
-            LabeledContent("Total Size", value: ByteCountFormatter.string(fromByteCount: library.totalSize, countStyle: .file))
             LabeledContent("Keys", value: library.keysImported ? "Imported" : "Missing")
+            LabeledContent("Shader cache", value: ByteCountFormatter.string(fromByteCount: shaderCacheSize, countStyle: .file))
 
             Button(role: .destructive) {
-                showingClearGamesAlert = true
+                showingClearShaders = true
             } label: {
-                Label("Remove All Games", systemImage: "trash")
+                Label("Clear shader cache", systemImage: "trash")
+            }
+            Button(role: .destructive) {
+                showingClearGames = true
+            } label: {
+                Label("Remove all games", systemImage: "trash")
             }
             .disabled(library.games.isEmpty)
-
             Button(role: .destructive) {
-                showingClearKeysAlert = true
+                showingClearKeys = true
             } label: {
                 Label("Delete prod.keys", systemImage: "key.slash")
             }
             .disabled(!library.keysImported)
         }
-    }
-
-    private var aboutSection: some View {
-        Section {
-            Button { showingAbout = true } label: {
-                Label("About NXLauncher", systemImage: "info.circle")
-            }
-        }
-    }
-
-    private var aboutView: some View {
-        NavigationStack {
-            VStack(spacing: 20) {
-                Spacer()
-                Image(systemName: "gamecontroller.fill")
-                    .font(.system(size: 64))
-                    .foregroundStyle(.purple)
-                Text("NXLauncher")
-                    .font(.largeTitle.bold())
-                Text("BlockMash Hybrid Launcher v2.0.0")
-                    .foregroundStyle(.secondary)
-                VStack(spacing: 6) {
-                    Text("Local NX game launcher for iOS")
-                    Text("iPhone 16 Pro / A18 Pro / iOS 27")
-                    Text("Metal GPU | NCE | Local Processing")
-                }
-                .font(.caption)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-                Spacer()
-                HStack(spacing: 16) {
-                    deviceBadge(icon: "cpu", label: "A18 Pro")
-                    deviceBadge(icon: "memorychip", label: "8 GB")
-                    deviceBadge(icon: "gpu", label: "Metal 3")
-                }
-                .padding(.bottom, 32)
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { showingAbout = false }
-                }
-            }
-        }
-    }
-
-    private func deviceBadge(icon: String, label: String) -> some View {
-        VStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.title3)
-            Text(label)
-                .font(.caption2)
-        }
-        .foregroundStyle(.purple)
-        .frame(width: 70, height: 60)
-        .background(Color.purple.opacity(0.1))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     private func refreshCacheSize() async {
