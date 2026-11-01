@@ -228,7 +228,9 @@ jobs:
 
       - name: Package source (AGPL-3.0)
         run: |
-          git -C melonx archive --format=tar.gz --prefix="melonx-$MELONX_COMMIT/" -o "$GITHUB_WORKSPACE/NXLauncher-source.tar.gz" HEAD
+          # Archive the patched tree that was actually built, not just the upstream commit.
+          tree=$(git -C melonx stash create)
+          git -C melonx archive --format=tar.gz --prefix="melonx-$MELONX_COMMIT/" -o "$GITHUB_WORKSPACE/NXLauncher-source.tar.gz" "${tree:-HEAD}"
           ls -lh NXLauncher-source.tar.gz
 
       - name: Create release
@@ -243,8 +245,12 @@ jobs:
           body: |
             ## NXLauncher — real Switch emulation (MeloNX / Ryujinx core)
 
-            Built from unmodified MeloNX source, upstream commit `${{ env.MELONX_COMMIT }}` (${{ env.MELONX_REPO }}).
-            Only the app name (NXLauncher) and bundle ID (`com.blockmash.nxlauncher`) are changed. The interface is MeloNX's own for now.
+            Built from MeloNX source, upstream commit `${{ env.MELONX_COMMIT }}` (${{ env.MELONX_REPO }}). The interface is MeloNX's own for now.
+
+            Changes from upstream:
+            - App name NXLauncher, bundle ID `com.blockmash.nxlauncher`
+            - `EmulationView.swift`: `private` removed from stored properties so its initializer is reachable (upstream doesn't compile otherwise)
+            - Swift layer built without optimization (`-Onone`): the Xcode 26.6 Swift compiler crashes when optimizing it. The Ryujinx core, which does the emulation, is fully optimized.
 
             ### Requirements
             - **JIT** — the core cannot run without it. In LiveContainer, launch the app with JIT enabled (set up StikDebug; on iOS 26+ StikDebug is required).

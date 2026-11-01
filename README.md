@@ -4,7 +4,7 @@ This repository builds two iOS apps:
 
 | App | What it is | Runs games? |
 |-----|------------|-------------|
-| **NXLauncher** | The MeloNX Switch emulator (Ryujinx core), built from upstream source with its own name and bundle ID | Yes, with JIT, prod.keys and firmware |
+| **NXLauncher** | The MeloNX Switch emulator (Ryujinx core), built from upstream source with its own name, bundle ID and two build fixes | Yes, with JIT, prod.keys and firmware |
 | **BlockMash** | Game library, import and touch-controller layout editor | **No.** It has no emulation core. |
 
 Both are released as unsigned IPAs via GitHub Actions ([Releases](../../releases)).
@@ -12,6 +12,10 @@ Both are released as unsigned IPAs via GitHub Actions ([Releases](../../releases
 ## NXLauncher
 
 Built by `.github/workflows/build-nxlauncher.yml` from the official MeloNX repository (`https://git.ryujinx.app/projects/MeloNX`). The UI is MeloNX's own for now.
+
+Changes from upstream, both needed to build with Xcode 26.6:
+- `EmulationView.swift`: `private` removed from stored properties, otherwise its initializer is inaccessible from `ContentView.swift`
+- The Swift layer is built with `-Onone`, because the Swift 6.3.3 optimizer crashes on it. The Ryujinx core that does the emulation is still fully optimized.
 
 Requirements on the device:
 - **JIT.** The core generates code at runtime and cannot run without it. On iOS 26 and later, StikDebug is required.
