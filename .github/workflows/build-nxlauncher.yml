@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  MELONX_REPO: https://git.ryujinx.app/melonx/emu.git
+  MELONX_REPO: https://git.ryujinx.app/projects/MeloNX.git
   APP_NAME: NXLauncher
   BUNDLE_ID: com.blockmash.nxlauncher
   # .NET 8's iOS workload refuses Xcode versions newer than it knows unless this is off.

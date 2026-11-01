@@ -11,7 +11,7 @@ Both are released as unsigned IPAs via GitHub Actions ([Releases](../../releases
 
 ## NXLauncher
 
-Built by `.github/workflows/build-nxlauncher.yml` from the official MeloNX repository (`https://git.ryujinx.app/melonx/emu.git`). The UI is MeloNX's own for now.
+Built by `.github/workflows/build-nxlauncher.yml` from the official MeloNX repository (`https://git.ryujinx.app/projects/MeloNX`). The UI is MeloNX's own for now.
 
 Requirements on the device:
 - **JIT.** The core generates code at runtime and cannot run without it. On iOS 26 and later, StikDebug is required.
