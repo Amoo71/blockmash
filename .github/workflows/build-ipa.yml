@@ -34,6 +34,7 @@ jobs:
 
       - name: Build
         run: |
+          set -o pipefail
           xcodebuild build \
             -project BlockMash.xcodeproj \
             -scheme BlockMash \
@@ -43,7 +44,16 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            ONLY_ACTIVE_ARCH=NO | tail -20
+            ONLY_ACTIVE_ARCH=NO 2>&1 | tee build.log | tail -50
+
+      - name: Show build errors
+        if: failure()
+        run: |
+          echo "=== Last 200 lines of build log ==="
+          tail -200 build.log
+          echo ""
+          echo "=== Errors ==="
+          grep -i "error:" build.log || echo "No explicit errors found"
 
       - name: Verify app bundle
         run: |

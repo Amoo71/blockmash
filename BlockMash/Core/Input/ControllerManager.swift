@@ -20,6 +20,7 @@ class ControllerManager: ObservableObject {
     @Published var isVirtualControllerActive = false
     @Published var swapAB = false
 
+    private var virtualController: GCVirtualController?
     private var cancellables = Set<AnyCancellable>()
 
     init() {
@@ -102,13 +103,15 @@ class ControllerManager: ObservableObject {
             GCInputDirectionPad
         ]
 
-        let virtual = GCVirtualController(configuration: config)
-        virtual.connect()
+        let vc = GCVirtualController(configuration: config)
+        vc.connect()
+        virtualController = vc
         isVirtualControllerActive = true
     }
 
     func stopVirtualController() {
-        GCVirtualController.controllers().forEach { $0.disconnect() }
+        virtualController?.disconnect()
+        virtualController = nil
         isVirtualControllerActive = false
     }
 }
