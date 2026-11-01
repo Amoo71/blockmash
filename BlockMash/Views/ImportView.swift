@@ -31,7 +31,7 @@ struct ImportView: View {
             .fileImporter(
                 isPresented: $showingKeysPicker,
                 allowedContentTypes: [.data],
-                allowsMultipleSelection: false
+                allowsMultipleSelection: true
             ) { handleKeysImport($0) }
             .alert(alertTitle, isPresented: $showingAlert) {
                 Button("OK") {}
