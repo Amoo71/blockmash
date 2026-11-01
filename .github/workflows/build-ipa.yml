@@ -3,6 +3,10 @@ name: Build BlockMash IPA
 on:
   push:
     branches: [ "claude/hybrid-launcher-ios-*", "main" ]
+    paths:
+      - "BlockMash/**"
+      - "project.yml"
+      - ".github/workflows/build-ipa.yml"
   workflow_dispatch:
 
 permissions:
@@ -118,33 +122,26 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v2.0.0-build.${{ github.run_number }}
-          name: "NXLauncher v2.0.0 (Build ${{ github.run_number }})"
+          name: "BlockMash library (Build ${{ github.run_number }}) — no emulation"
           body: |
-            ## NXLauncher v2.0.0 — Hybrid Launcher for iOS
+            ## BlockMash — game library and controller layout
 
-            Unsigned IPA for sideloading via AltStore, SideStore, LiveContainer, or similar.
-            Binary patched MH_EXECUTE→MH_DYLIB + ad-hoc signed for LiveContainer compatibility.
-            Target: iPhone 16 Pro / A18 Pro / iOS 27 / Metal 3
+            **This app does not run games. It has no emulation core.**
 
-            ### Features
-            - NSP/NSZ/XCI/XCZ game file import with NCA structure parsing
-            - PFS0 and HFS0 container format support
-            - prod.keys encryption key management (on-device)
-            - Per-title shader cache with size tracking
-            - Metal GPU renderer with resolution scaling
-            - CPU accuracy and memory layout configuration
-            - NCE (Native Code Execution) support
-            - Physical controller support (DualSense, Xbox, Pro Controller)
-            - Virtual on-screen controller
-            - Button test grid and Nintendo A/B swap
-            - Game launch state machine with FPS display
-            - Update and DLC auto-detection by title ID
+            ### What it does
+            - Import NSP/NSZ/XCI/XCZ via the file picker, the clipboard, or its Games folder in the Files app
+            - Read container metadata: title ID (from the file name tag or ticket), version tag, NCA count
+            - Group updates and DLC under their base game by title ID
+            - Keep prod.keys on-device
+            - Touch controller layout editor: position, size and opacity per button
+            - Show connected physical controllers, A/B swap
 
             ### Installation
             1. Download `BlockMash.ipa`
-            2. Open LiveContainer → import IPA
-            3. **Delete any old BlockMash entry first** before importing
-            4. Launch from LiveContainer
+            2. Delete any old BlockMash in LiveContainer, then import the IPA
+            3. If the file picker doesn't respond: long-press BlockMash → Settings → turn on "Fix File Picker"
+
+            Unsigned, binary patched MH_EXECUTE→MH_DYLIB and ad-hoc signed for LiveContainer.
           files: BlockMash.ipa
           draft: false
           prerelease: true

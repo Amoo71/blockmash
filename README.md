@@ -1,57 +1,32 @@
-# BlockMash — Hybrid Launcher
+# BlockMash
 
-iOS game library launcher. Import, manage, and organize your games locally on your device.
+Game library, import and touch-controller layout editor for iOS.
+
+**BlockMash does not run games. It has no emulation core.**
 
 ## Features
 
-- **Game Library** — Browse, search, and sort your collection
-- **File Import** — Import NSP, NSZ, XCI, XCZ via the iOS Files app
-- **Key Management** — Import and manage prod.keys
-- **Update & DLC Tracking** — Associate updates and DLC with base games
-- **Settings** — Renderer selection (Metal / MoltenVK), shader cache, auto-updates
+- Import NSP, NSZ, XCI, XCZ via the file picker, the clipboard, or the app's `Games` folder in the Files app (auto-scanned when the app becomes active)
+- Reads container metadata: title ID (file name tag or ticket), version tag, NCA count
+- Groups updates and DLC under the base game by title ID
+- Keeps prod.keys on-device
+- Touch controller layout editor: position, size and opacity per button
+- Shows connected physical controllers, A/B swap
 
-## Build
-
-The IPA is built automatically via GitHub Actions on every push.
-
-**Manual build:**
-```bash
-brew install xcodegen
-xcodegen generate
-xcodebuild build \
-  -project BlockMash.xcodeproj \
-  -scheme BlockMash \
-  -configuration Release \
-  -sdk iphoneos \
-  -derivedDataPath build \
-  CODE_SIGN_IDENTITY="" \
-  CODE_SIGNING_REQUIRED=NO \
-  CODE_SIGNING_ALLOWED=NO
-```
+In LiveContainer, if the file picker's Open button does nothing, long-press the app → Settings → enable **Fix File Picker**.
 
 ## Install
 
 1. Download `BlockMash.ipa` from [Releases](../../releases)
-2. Sideload with AltStore, SideStore, LiveContainer, or your preferred tool
+2. Sideload with LiveContainer, SideStore, AltStore or similar
 
-## Requirements
+## Build
 
-- iOS 17.0+
-- arm64 device (iPhone, iPad)
+The IPA is built by GitHub Actions on every push that touches the app.
 
-## Architecture
-
-```
-BlockMash/
-├── BlockMashApp.swift       # App entry point
-├── ContentView.swift        # Tab navigation
-├── Models/
-│   ├── GameEntry.swift      # Game data model
-│   └── GameLibrary.swift    # Library state management
-├── Views/
-│   ├── LibraryView.swift    # Game grid/list
-│   ├── GameDetailView.swift # Game info & actions
-│   ├── ImportView.swift     # File picker & import
-│   └── SettingsView.swift   # App configuration
-└── Assets.xcassets/         # Colors & app icon
+```bash
+brew install xcodegen
+xcodegen generate
+xcodebuild build -project BlockMash.xcodeproj -scheme BlockMash -configuration Release -sdk iphoneos \
+  CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
 ```

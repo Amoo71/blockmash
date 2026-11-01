@@ -24,7 +24,6 @@ class GameLibrary: ObservableObject {
     enum SortOrder: String, CaseIterable {
         case title = "Title"
         case dateAdded = "Date Added"
-        case lastPlayed = "Last Played"
         case fileSize = "Size"
     }
 
@@ -40,8 +39,6 @@ class GameLibrary: ObservableObject {
             return games.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
         case .dateAdded:
             return games.sorted { $0.dateAdded > $1.dateAdded }
-        case .lastPlayed:
-            return games.sorted { ($0.lastPlayed ?? .distantPast) > ($1.lastPlayed ?? .distantPast) }
         case .fileSize:
             return games.sorted { $0.fileSize > $1.fileSize }
         }
@@ -71,8 +68,6 @@ class GameLibrary: ObservableObject {
             var merged = game
             merged.updates = games[existing].updates
             merged.dlc = games[existing].dlc
-            merged.lastPlayed = games[existing].lastPlayed
-            merged.playTime = games[existing].playTime
             games[existing] = merged
         } else {
             games.append(game)
@@ -116,9 +111,7 @@ class GameLibrary: ObservableObject {
             fileSize: result.fileSize,
             filePath: url.path,
             bookmark: bookmark,
-            ncaCount: result.ncaCount,
-            hasProgramNCA: result.hasProgramNCA,
-            hasControlNCA: result.hasControlNCA
+            ncaCount: result.ncaCount
         )
         addGame(game)
         return game
@@ -241,13 +234,6 @@ class GameLibrary: ObservableObject {
     func removeAllGames() {
         games = []
         save()
-    }
-
-    func markPlayed(_ game: GameEntry) {
-        if let idx = games.firstIndex(where: { $0.id == game.id }) {
-            games[idx].lastPlayed = Date()
-            save()
-        }
     }
 
     // MARK: - Keys

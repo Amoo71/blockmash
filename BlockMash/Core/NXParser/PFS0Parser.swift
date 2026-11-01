@@ -71,22 +71,9 @@ struct PFS0Parser {
         guard fileCount <= maxFiles, stringTableSize <= maxStringTable else { throw PFS0Error.truncatedHeader }
         return (fileCount, stringTableSize)
     }
-
-    static func ncaEntries(from header: PFS0Header) -> [NCAInfo] {
-        header.entries.compactMap { entry in
-            guard NCAInfo.isNCAName(entry.name) else { return nil }
-            return NCAInfo(name: entry.name, offset: entry.dataOffset, size: entry.dataSize)
-        }
-    }
 }
 
-struct NCAInfo {
-    let name: String
-    let offset: UInt64
-    let size: UInt64
-
-    var isMeta: Bool { name.lowercased().contains(".cnmt.") }
-
+enum NCAInfo {
     /// .ncz is the compressed NCA used inside NSZ/XCZ.
     static func isNCAName(_ name: String) -> Bool {
         let lower = name.lowercased()

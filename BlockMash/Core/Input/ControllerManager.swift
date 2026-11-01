@@ -17,10 +17,8 @@ struct NXButtonState {
 class ControllerManager: ObservableObject {
     @Published var connectedControllers: [GCController] = []
     @Published var buttonState = NXButtonState()
-    @Published var isVirtualControllerActive = false
     @Published var swapAB = false
 
-    private var virtualController: GCVirtualController?
     private var cancellables = Set<AnyCancellable>()
 
     init() {
@@ -91,27 +89,6 @@ class ControllerManager: ObservableObject {
         if let home = gamepad.buttonHome { state.home = home.isPressed }
 
         buttonState = state
-    }
-
-    func startVirtualController() {
-        let config = GCVirtualController.Configuration()
-        config.elements = [
-            GCInputLeftThumbstick, GCInputRightThumbstick,
-            GCInputButtonA, GCInputButtonB, GCInputButtonX, GCInputButtonY,
-            GCInputLeftShoulder, GCInputRightShoulder,
-            GCInputLeftTrigger, GCInputRightTrigger
-        ]
-
-        let vc = GCVirtualController(configuration: config)
-        vc.connect()
-        virtualController = vc
-        isVirtualControllerActive = true
-    }
-
-    func stopVirtualController() {
-        virtualController?.disconnect()
-        virtualController = nil
-        isVirtualControllerActive = false
     }
 
     func applyTouch(id: TouchButtonID, pressed: Bool) {

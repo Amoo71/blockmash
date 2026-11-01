@@ -10,13 +10,9 @@ struct GameEntry: Identifiable, Codable, Hashable {
     var filePath: String
     var bookmark: Data?
     var dateAdded: Date
-    var lastPlayed: Date?
-    var playTime: TimeInterval
     var updates: [GameUpdate]
     var dlc: [GameDLC]
     var ncaCount: Int
-    var hasProgramNCA: Bool
-    var hasControlNCA: Bool
 
     init(
         title: String,
@@ -26,9 +22,7 @@ struct GameEntry: Identifiable, Codable, Hashable {
         fileSize: Int64,
         filePath: String,
         bookmark: Data? = nil,
-        ncaCount: Int = 0,
-        hasProgramNCA: Bool = false,
-        hasControlNCA: Bool = false
+        ncaCount: Int = 0
     ) {
         self.id = UUID()
         self.title = title
@@ -39,13 +33,9 @@ struct GameEntry: Identifiable, Codable, Hashable {
         self.filePath = filePath
         self.bookmark = bookmark
         self.dateAdded = Date()
-        self.lastPlayed = nil
-        self.playTime = 0
         self.updates = []
         self.dlc = []
         self.ncaCount = ncaCount
-        self.hasProgramNCA = hasProgramNCA
-        self.hasControlNCA = hasControlNCA
     }
 
     /// Finds the game file: stored path, then bookmark, then the app's Games folder.
@@ -78,18 +68,6 @@ struct GameEntry: Identifiable, Codable, Hashable {
 
     var formattedSize: String {
         ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file)
-    }
-
-    var formattedPlayTime: String {
-        if playTime < 60 { return "< 1 min" }
-        let hours = Int(playTime) / 3600
-        let minutes = (Int(playTime) % 3600) / 60
-        if hours > 0 { return "\(hours)h \(minutes)m" }
-        return "\(minutes) min"
-    }
-
-    var isLaunchable: Bool {
-        hasProgramNCA && fileExists
     }
 
     var fileExists: Bool {

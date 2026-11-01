@@ -100,8 +100,4 @@ struct XCIParser {
     static func securePartition(from header: XCIHeader) -> XCIPartition? {
         header.partitions.first { $0.name.lowercased() == "secure" }
     }
-
-    static func ncaFiles(from partition: XCIPartition) -> [HFS0Entry] {
-        partition.files.filter { NCAInfo.isNCAName($0.name) }
-    }
 }

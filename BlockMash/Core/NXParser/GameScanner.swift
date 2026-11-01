@@ -7,8 +7,6 @@ struct ScanResult {
     let fileType: GameFileType
     let fileSize: Int64
     let ncaCount: Int
-    let hasProgramNCA: Bool
-    let hasControlNCA: Bool
     let contentType: ContentType
 
     enum ContentType: String {
@@ -31,19 +29,12 @@ actor GameScanner {
         let fileSize = Int64((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
 
         let entryNames: [String]
-        let contentNCASizes: [UInt64]
         switch fileType {
         case .nsp, .nsz:
-            let header = try PFS0Parser.parseFromFile(url: url)
-            entryNames = header.entries.map(\.name)
-            contentNCASizes = PFS0Parser.ncaEntries(from: header).filter { !$0.isMeta }.map(\.size)
+            entryNames = try PFS0Parser.parseFromFile(url: url).entries.map(\.name)
         case .xci, .xcz:
             let header = try XCIParser.parseHeader(url: url)
-            let secure = XCIParser.securePartition(from: header)
-            entryNames = secure?.files.map(\.name) ?? []
-            contentNCASizes = (secure.map { XCIParser.ncaFiles(from: $0) } ?? [])
-                .filter { !$0.name.lowercased().contains(".cnmt.") }
-                .map(\.size)
+            entryNames = XCIParser.securePartition(from: header)?.files.map(\.name) ?? []
         }
 
         let fileName = url.lastPathComponent
@@ -55,10 +46,6 @@ actor GameScanner {
             fileType: fileType,
             fileSize: fileSize,
             ncaCount: entryNames.filter(NCAInfo.isNCAName).count,
-            // Without decrypting NCA headers the program NCA is simply the content NCA that exists;
-            // a second content NCA is almost always the control (icon/name) NCA.
-            hasProgramNCA: !contentNCASizes.isEmpty,
-            hasControlNCA: contentNCASizes.count >= 2,
             contentType: Self.classify(titleId)
         )
     }
