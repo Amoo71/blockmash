@@ -242,11 +242,12 @@ jobs:
           find "$app/Frameworks" -maxdepth 1 \( -name '*.dylib' -o -name '*.framework' \) -exec codesign --force --sign - {} \;
           codesign --force --sign - --entitlements nxlauncher.entitlements "$app"
 
-          # No release unless the bundle passes the static launch checks.
+          # No release unless the bundle passes the static launch checks. Entitlements aren't
+          # required here: inside LiveContainer a guest app runs with LiveContainer's own
+          # entitlements, and the MH_DYLIB-patched executable doesn't carry any.
           python3 "$GITHUB_WORKSPACE/.github/scripts/verify_app.py" "$app" \
             --sdk "$(xcrun --sdk iphoneos --show-sdk-path)" \
-            --expect-dylib \
-            --require-entitlement com.apple.developer.kernel.increased-memory-limit
+            --expect-dylib
 
           rm -rf "$GITHUB_WORKSPACE/export"
           mkdir -p "$GITHUB_WORKSPACE/export/Payload"
@@ -284,7 +285,8 @@ jobs:
             ### Requirements
             - **JIT** — the core cannot run without it. In LiveContainer, launch the app with JIT enabled (set up StikDebug; on iOS 26+ StikDebug is required).
             - **prod.keys and firmware** dumped from your own Switch. The app asks for both on first start.
-            - **Increased Memory Limit** entitlement, granted by your sideloading setup.
+            - **Increased Memory Limit** entitlement. Inside LiveContainer, apps run with LiveContainer's own entitlements, so LiveContainer needs it.
+            - This build is for **LiveContainer** only: its executable is patched to MH_DYLIB and can't be installed as a standalone app.
 
             ### License
             MeloNX is licensed under the GNU AGPL v3 or later, © Rhajune Park and contributors, and so is this build.

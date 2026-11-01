@@ -186,15 +186,31 @@ def main():
         if r.returncode != 0:
             error(f"code signature invalid: {r.stderr.strip()}")
         if args.require_entitlement:
-            r = subprocess.run(["codesign", "-d", "--entitlements", "-", "--xml", app], capture_output=True)
-            ents = plistlib.loads(r.stdout) if r.stdout.strip() else {}
+            ents, raw = read_entitlements(app)
             for key in args.require_entitlement:
                 if not ents.get(key):
-                    error(f"entitlement {key} missing")
+                    error(f"entitlement {key} missing (codesign reported: {raw[:300]!r})")
     elif args.require_entitlement:
         print("  (codesign not available: signature and entitlements not checked)")
 
     return finish(len(binaries))
+
+
+def read_entitlements(app):
+    """Entitlements of the signed bundle, plus what codesign printed (for error messages)."""
+    raw = b""
+    for cmd in (["codesign", "-d", "--entitlements", "-", "--xml", app],
+                ["codesign", "-d", "--entitlements", ":-", app]):
+        r = subprocess.run(cmd, capture_output=True)
+        for out in (r.stdout, r.stderr):
+            start = out.find(b"<?xml")
+            if start != -1:
+                try:
+                    return plistlib.loads(out[start:]), out
+                except Exception:
+                    pass
+            raw = raw or out.strip()
+    return {}, raw.decode(errors="replace")
 
 
 def finish(count=0):

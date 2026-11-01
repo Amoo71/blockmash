@@ -20,7 +20,8 @@ Changes from upstream, both needed to build with Xcode 26.6:
 Requirements on the device:
 - **JIT.** The core generates code at runtime and cannot run without it. On iOS 26 and later, StikDebug is required.
 - **prod.keys and firmware** dumped from your own Switch.
-- **Increased Memory Limit** entitlement from your sideloading setup.
+- **Increased Memory Limit** entitlement. Inside LiveContainer, apps run with LiveContainer's own entitlements, so LiveContainer needs it.
+- **LiveContainer.** The executable is patched to MH_DYLIB, so the IPA can't be installed as a standalone app.
 
 **License:** MeloNX is GNU AGPL v3 or later (© Rhajune Park and contributors), so NXLauncher is too. Each release ships the exact source tree as `NXLauncher-source.tar.gz`.
 
