@@ -137,9 +137,13 @@ jobs:
       - name: Build (Ryujinx core + app)
         working-directory: melonx
         run: |
-          libdeps="$PWD/build/libdeps"
-          mkdir -p build
-          ln -sfn "$PWD/src/MeloNX/MeloNX/Dependencies/Dynamic Libraries" "$libdeps"
+          echo "::group::How the Xcode project links the core"
+          grep -n -E "Ryujinx\.Library|\.dylib|Embed" src/MeloNX/MeloNX.xcodeproj/project.pbxproj | cut -c1-260 | head -40 || true
+          echo "::endgroup::"
+
+          # SWIFT_OPTIMIZATION_LEVEL=-Onone: Swift 6.3.3 (Xcode 26.6) crashes in EarlyPerfInliner
+          # on Setting.deinit (NativeSettingsManager.swift) when optimizing. Emulation runs in the
+          # .NET core, which stays fully optimized; only the Swift UI layer is built unoptimized.
           log="$GITHUB_WORKSPACE/build.log"
           if ! xcodebuild \
               -project src/MeloNX/MeloNX.xcodeproj \
@@ -155,15 +159,14 @@ jobs:
               DEVELOPMENT_TEAM="" \
               AD_HOC_CODE_SIGNING_ALLOWED=YES \
               ONLY_ACTIVE_ARCH=NO \
-              "LIBRARY_SEARCH_PATHS=\$(inherited) $libdeps" \
-              "OTHER_LDFLAGS=\$(inherited) $libdeps/Ryujinx.Headless.SDL2.dylib" \
+              SWIFT_OPTIMIZATION_LEVEL=-Onone \
               > "$log" 2>&1; then
             echo "=== errors ==="
-            grep -n -E "error[: ]|Error MSB|: error " "$log" | head -100 || true
+            grep -n -E "error[: ]|Error MSB|: error |Stack dump:|ld: " "$log" | cut -c1-400 | head -100 || true
             echo "=== core (.NET) build lines ==="
-            grep -n -E "ExternalBuildToolExecution|PhaseScriptExecution|dotnet|publish|ILCompiler|Ryujinx\.Headless" "$log" | cut -c1-300 | head -60 || true
-            echo "=== last 200 lines ==="
-            tail -200 "$log"
+            grep -n -E "ExternalBuildToolExecution|Ryujinx\.Library ->" "$log" | cut -c1-300 | head -20 || true
+            echo "=== last 120 lines (without .NET analyzer warnings) ==="
+            grep -v -E "warning (CA|IL|CS)[0-9]+" "$log" | tail -120
             exit 1
           fi
           tail -30 "$log"
@@ -183,13 +186,17 @@ jobs:
           app=$(find build/DerivedData/Build/Products/Release-iphoneos -maxdepth 1 -name 'MeloNX.app' -type d | head -1)
           test -n "$app"
 
-          core="src/MeloNX/MeloNX/Dependencies/Dynamic Libraries/Ryujinx.Headless.SDL2.dylib"
-          if [ ! -f "$core" ]; then
-            core=$(find src/Ryujinx.Headless.SDL2 -name 'Ryujinx.Headless.SDL2.dylib' -type f | head -1)
-          fi
-          test -f "$core"
+          # The project normally embeds the core; only copy it in if the build didn't.
           mkdir -p "$app/Frameworks"
-          ditto "$core" "$app/Frameworks/Ryujinx.Headless.SDL2.dylib"
+          if ! find "$app/Frameworks" -maxdepth 1 -iname '*Ryujinx*' | grep -q .; then
+            core=$(find src/Ryujinx.Library/bin -path '*ios-arm64/publish/*' -iname '*Ryujinx*.dylib' -type f | head -1)
+            test -n "$core"
+            echo "Embedding core from $core"
+            ditto "$core" "$app/Frameworks/$(basename "$core")"
+          fi
+          echo "::group::App Frameworks"
+          ls -la "$app/Frameworks"
+          echo "::endgroup::"
 
           plist="$app/Info.plist"
           /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $BUNDLE_ID" "$plist"
