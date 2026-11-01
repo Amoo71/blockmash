@@ -5,6 +5,7 @@ on:
     branches: [ "claude/hybrid-launcher-ios-*", "main" ]
     paths:
       - ".github/workflows/build-nxlauncher.yml"
+      - ".github/scripts/**"
   workflow_dispatch:
 
 permissions:
@@ -240,7 +241,12 @@ jobs:
           EOF
           find "$app/Frameworks" -maxdepth 1 \( -name '*.dylib' -o -name '*.framework' \) -exec codesign --force --sign - {} \;
           codesign --force --sign - --entitlements nxlauncher.entitlements "$app"
-          codesign -d --entitlements - "$app" || true
+
+          # No release unless the bundle passes the static launch checks.
+          python3 "$GITHUB_WORKSPACE/.github/scripts/verify_app.py" "$app" \
+            --sdk "$(xcrun --sdk iphoneos --show-sdk-path)" \
+            --expect-dylib \
+            --require-entitlement com.apple.developer.kernel.increased-memory-limit
 
           rm -rf "$GITHUB_WORKSPACE/export"
           mkdir -p "$GITHUB_WORKSPACE/export/Payload"
