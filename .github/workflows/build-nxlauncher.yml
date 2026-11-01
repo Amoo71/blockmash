@@ -57,6 +57,14 @@ jobs:
             | xargs -0 -I{} sh -c 'printf "%s: " "{}"; file -b "{}" | cut -c1-100' || true
           echo "::endgroup::"
 
+          echo "::group::Upstream build scripts and Xcode build phases"
+          ls -la melonx/distribution/ios || true
+          for f in melonx/distribution/ios/*.sh; do echo "----- $f"; cat "$f"; done
+          pbx=melonx/src/MeloNX/MeloNX.xcodeproj/project.pbxproj
+          grep -n -E "buildToolPath|buildArgumentsString|buildWorkingDirectory|isa = PBXLegacyTarget|isa = PBXNativeTarget" "$pbx" || true
+          grep -n "shellScript = " "$pbx" | cut -c1-500 || true
+          echo "::endgroup::"
+
           # LFS pointers instead of real binaries would only fail much later at link time.
           moltenvk="melonx/src/MeloNX/MeloNX/Dependencies/Dynamic Libraries/libMoltenVK.dylib"
           if ! file "$moltenvk" | grep -q "Mach-O"; then
@@ -73,10 +81,14 @@ jobs:
           # get_dotnet.sh returns the first dotnet binary it finds on disk, which can be an
           # image-provided SDK without .NET 8; hard-wire the one setup-dotnet installed.
           set -euo pipefail
-          dotnet_bin=$(command -v dotnet)
-          printf '#!/bin/bash\necho "%s"\n' "$dotnet_bin" > melonx/distribution/ios/get_dotnet.sh
-          chmod +x melonx/distribution/ios/get_dotnet.sh
-          cat melonx/distribution/ios/get_dotnet.sh
+          finder=melonx/distribution/ios/get_dotnet.sh
+          if [ -f "$finder" ]; then
+            printf '#!/bin/bash\necho "%s"\n' "$(command -v dotnet)" > "$finder"
+            chmod +x "$finder"
+            cat "$finder"
+          else
+            echo "::notice::$finder not in upstream; leaving .NET discovery to the upstream build"
+          fi
           cd melonx && dotnet --version
 
       - name: Cache NuGet packages
@@ -93,18 +105,6 @@ jobs:
       - name: Resolve Swift packages
         working-directory: melonx
         run: xcodebuild -project src/MeloNX/MeloNX.xcodeproj -scheme MeloNX -resolvePackageDependencies
-
-      - name: Build Ryujinx core (.NET NativeAOT)
-        working-directory: melonx
-        run: |
-          log="$GITHUB_WORKSPACE/core.log"
-          if ! sh ./distribution/ios/xc-compile.sh > "$log" 2>&1; then
-            grep -n -E "error|Error" "$log" | head -60 || true
-            tail -80 "$log"
-            exit 1
-          fi
-          tail -15 "$log"
-          find src/Ryujinx.Headless.SDL2/bin -name 'Ryujinx.Headless.SDL2.dylib' -exec ls -lh {} \;
 
       - name: Patch upstream Swift sources
         working-directory: melonx
@@ -160,6 +160,8 @@ jobs:
               > "$log" 2>&1; then
             echo "=== errors ==="
             grep -n -E "error[: ]|Error MSB|: error " "$log" | head -100 || true
+            echo "=== core (.NET) build lines ==="
+            grep -n -E "ExternalBuildToolExecution|PhaseScriptExecution|dotnet|publish|ILCompiler|Ryujinx\.Headless" "$log" | cut -c1-300 | head -60 || true
             echo "=== last 200 lines ==="
             tail -200 "$log"
             exit 1
@@ -171,9 +173,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: NXLauncher-build-log
-          path: |
-            build.log
-            core.log
+          path: build.log
           if-no-files-found: ignore
 
       - name: Package NXLauncher.ipa
