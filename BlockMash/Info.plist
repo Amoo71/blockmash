@@ -68,6 +68,23 @@
                 </array>
             </dict>
         </dict>
+        <dict>
+            <key>UTTypeConformsTo</key>
+            <array>
+                <string>public.plain-text</string>
+            </array>
+            <key>UTTypeDescription</key>
+            <string>Encryption Keys</string>
+            <key>UTTypeIdentifier</key>
+            <string>com.blockmash.prod-keys</string>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array>
+                    <string>keys</string>
+                </array>
+            </dict>
+        </dict>
     </array>
     <key>CFBundleDocumentTypes</key>
     <array>
@@ -80,6 +97,17 @@
             </array>
             <key>LSHandlerRank</key>
             <string>Owner</string>
+        </dict>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>Encryption Keys</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>com.blockmash.prod-keys</string>
+                <string>public.plain-text</string>
+            </array>
+            <key>LSHandlerRank</key>
+            <string>Alternate</string>
         </dict>
     </array>
 </dict>

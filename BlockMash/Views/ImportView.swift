@@ -12,6 +12,7 @@ struct ImportView: View {
     @State private var alertMessage = ""
 
     private let gameType = UTType("com.blockmash.game-rom") ?? .data
+    private let keysType = UTType("com.blockmash.prod-keys") ?? .plainText
 
     var body: some View {
         NavigationStack {
@@ -30,7 +31,7 @@ struct ImportView: View {
             ) { handleFileImport($0) }
             .fileImporter(
                 isPresented: $showingKeysPicker,
-                allowedContentTypes: [.data, .text, .plainText, .item],
+                allowedContentTypes: [keysType, .plainText, .data, .item],
                 allowsMultipleSelection: false
             ) { handleKeysImport($0) }
             .alert(alertTitle, isPresented: $showingAlert) {
