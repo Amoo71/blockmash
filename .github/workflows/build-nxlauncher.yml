@@ -259,7 +259,7 @@ jobs:
 
             ### License
             MeloNX is licensed under the GNU AGPL v3 or later, © Rhajune Park and contributors, and so is this build.
-            Source: `NXLauncher-source.tar.gz` (exact upstream tree) plus the build script
+            Source: `NXLauncher-source.tar.gz` (the exact patched tree this build was compiled from) plus the build script
             ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/.github/workflows/build-nxlauncher.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
