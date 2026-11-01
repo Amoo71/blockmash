@@ -1,0 +1,195 @@
+name: Build NXLauncher (MeloNX core)
+
+on:
+  push:
+    branches: [ "claude/hybrid-launcher-ios-*", "main" ]
+    paths:
+      - ".github/workflows/build-nxlauncher.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nxlauncher-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  MELONX_REPO: https://git.ryujinx.app/melonx/emu.git
+  APP_NAME: NXLauncher
+  BUNDLE_ID: com.blockmash.nxlauncher
+  # .NET 8's iOS workload refuses Xcode versions newer than it knows unless this is off.
+  ValidateXcodeVersion: "false"
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          set -euo pipefail
+          XCODE=$(find /Applications -maxdepth 1 -name 'Xcode*.app' | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          xcodebuild -version
+
+      - name: Fetch MeloNX source
+        run: |
+          set -euo pipefail
+          git lfs install
+          git clone --depth 1 "$MELONX_REPO" melonx
+          git -C melonx lfs pull
+          echo "MELONX_COMMIT=$(git -C melonx rev-parse HEAD)" >> "$GITHUB_ENV"
+          git -C melonx log -1 --format='Upstream commit: %H (%cd) %s'
+          # LFS pointers instead of real binaries would only fail much later at link time.
+          file "melonx/src/MeloNX/MeloNX/Dependencies/Dynamic Libraries/libMoltenVK.dylib" | grep -q "Mach-O"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: melonx/global.json
+
+      - name: Point the Xcode build at this .NET
+        run: |
+          # get_dotnet.sh returns the first dotnet binary it finds on disk, which can be an
+          # image-provided SDK without .NET 8; hard-wire the one setup-dotnet installed.
+          set -euo pipefail
+          dotnet_bin=$(command -v dotnet)
+          printf '#!/bin/bash\necho "%s"\n' "$dotnet_bin" > melonx/distribution/ios/get_dotnet.sh
+          chmod +x melonx/distribution/ios/get_dotnet.sh
+          cat melonx/distribution/ios/get_dotnet.sh
+          cd melonx && dotnet --version
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-melonx-nuget-${{ hashFiles('melonx/Directory.Packages.props', 'melonx/nuget.config') }}
+          restore-keys: ${{ runner.os }}-melonx-nuget-
+
+      - name: Install .NET iOS workload
+        working-directory: melonx
+        run: dotnet workload install ios
+
+      - name: Resolve Swift packages
+        working-directory: melonx
+        run: xcodebuild -project src/MeloNX/MeloNX.xcodeproj -scheme MeloNX -resolvePackageDependencies
+
+      - name: Build (Ryujinx core + app)
+        working-directory: melonx
+        run: |
+          libdeps="$PWD/build/libdeps"
+          mkdir -p build
+          ln -sfn "$PWD/src/MeloNX/MeloNX/Dependencies/Dynamic Libraries" "$libdeps"
+          log="$GITHUB_WORKSPACE/build.log"
+          if ! xcodebuild \
+              -project src/MeloNX/MeloNX.xcodeproj \
+              -scheme MeloNX \
+              -configuration Release \
+              -sdk iphoneos \
+              -destination "generic/platform=iOS" \
+              -derivedDataPath build/DerivedData \
+              clean build \
+              CODE_SIGNING_ALLOWED=NO \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGN_IDENTITY="" \
+              DEVELOPMENT_TEAM="" \
+              AD_HOC_CODE_SIGNING_ALLOWED=YES \
+              ONLY_ACTIVE_ARCH=NO \
+              "LIBRARY_SEARCH_PATHS=\$(inherited) $libdeps" \
+              "OTHER_LDFLAGS=\$(inherited) $libdeps/Ryujinx.Headless.SDL2.dylib" \
+              > "$log" 2>&1; then
+            echo "=== errors ==="
+            grep -n -E "error[: ]|Error MSB|: error " "$log" | head -100 || true
+            echo "=== last 200 lines ==="
+            tail -200 "$log"
+            exit 1
+          fi
+          tail -30 "$log"
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: NXLauncher-build-log
+          path: build.log
+          if-no-files-found: ignore
+
+      - name: Package NXLauncher.ipa
+        working-directory: melonx
+        run: |
+          set -euo pipefail
+          app=$(find build/DerivedData/Build/Products/Release-iphoneos -maxdepth 1 -name 'MeloNX.app' -type d | head -1)
+          test -n "$app"
+
+          core="src/MeloNX/MeloNX/Dependencies/Dynamic Libraries/Ryujinx.Headless.SDL2.dylib"
+          if [ ! -f "$core" ]; then
+            core=$(find src/Ryujinx.Headless.SDL2 -name 'Ryujinx.Headless.SDL2.dylib' -type f | head -1)
+          fi
+          test -f "$core"
+          mkdir -p "$app/Frameworks"
+          ditto "$core" "$app/Frameworks/Ryujinx.Headless.SDL2.dylib"
+
+          plist="$app/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $BUNDLE_ID" "$plist"
+          /usr/libexec/PlistBuddy -c "Delete :CFBundleDisplayName" "$plist" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string $APP_NAME" "$plist"
+
+          # Ad-hoc sign so sideloading tools can read the entitlements the core needs.
+          cat > nxlauncher.entitlements <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>com.apple.developer.kernel.increased-memory-limit</key>
+              <true/>
+              <key>get-task-allow</key>
+              <true/>
+          </dict>
+          </plist>
+          EOF
+          find "$app/Frameworks" -maxdepth 1 \( -name '*.dylib' -o -name '*.framework' \) -exec codesign --force --sign - {} \;
+          codesign --force --sign - --entitlements nxlauncher.entitlements "$app"
+          codesign -d --entitlements - "$app" || true
+
+          rm -rf "$GITHUB_WORKSPACE/export"
+          mkdir -p "$GITHUB_WORKSPACE/export/Payload"
+          ditto "$app" "$GITHUB_WORKSPACE/export/Payload/$APP_NAME.app"
+          (cd "$GITHUB_WORKSPACE/export" && zip -qry "$GITHUB_WORKSPACE/$APP_NAME.ipa" Payload)
+          ls -lh "$GITHUB_WORKSPACE/$APP_NAME.ipa"
+
+      - name: Package source (AGPL-3.0)
+        run: |
+          git -C melonx archive --format=tar.gz --prefix="melonx-$MELONX_COMMIT/" -o "$GITHUB_WORKSPACE/NXLauncher-source.tar.gz" HEAD
+          ls -lh NXLauncher-source.tar.gz
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nxlauncher-build.${{ github.run_number }}
+          name: "NXLauncher — MeloNX core (Build ${{ github.run_number }})"
+          prerelease: true
+          files: |
+            NXLauncher.ipa
+            NXLauncher-source.tar.gz
+          body: |
+            ## NXLauncher — real Switch emulation (MeloNX / Ryujinx core)
+
+            Built from unmodified MeloNX source, upstream commit `${{ env.MELONX_COMMIT }}` (${{ env.MELONX_REPO }}).
+            Only the app name (NXLauncher) and bundle ID (`com.blockmash.nxlauncher`) are changed. The interface is MeloNX's own for now.
+
+            ### Requirements
+            - **JIT** — the core cannot run without it. In LiveContainer, launch the app with JIT enabled (set up StikDebug; on iOS 26+ StikDebug is required).
+            - **prod.keys and firmware** dumped from your own Switch. The app asks for both on first start.
+            - **Increased Memory Limit** entitlement, granted by your sideloading setup.
+
+            ### License
+            MeloNX is licensed under the GNU AGPL v3 or later, © Rhajune Park and contributors, and so is this build.
+            Source: `NXLauncher-source.tar.gz` (exact upstream tree) plus the build script
+            ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/.github/workflows/build-nxlauncher.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
