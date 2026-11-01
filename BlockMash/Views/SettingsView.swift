@@ -13,6 +13,8 @@ struct SettingsView: View {
     @AppStorage("useNCE") private var useNCE = true
     @State private var shaderCacheSize: Int64 = 0
     @State private var showingClearAlert = false
+    @State private var showingClearGamesAlert = false
+    @State private var showingClearKeysAlert = false
     @State private var showingAbout = false
 
     var body: some View {
@@ -37,6 +39,18 @@ struct SettingsView: View {
                 }
             } message: {
                 Text("All cached shaders will be removed. Games will recompile shaders on next launch.")
+            }
+            .alert("Remove all games?", isPresented: $showingClearGamesAlert) {
+                Button("Cancel", role: .cancel) {}
+                Button("Remove", role: .destructive) { library.removeAllGames() }
+            } message: {
+                Text("Clears the library index. Original files on your device are not deleted.")
+            }
+            .alert("Delete prod.keys?", isPresented: $showingClearKeysAlert) {
+                Button("Cancel", role: .cancel) {}
+                Button("Delete", role: .destructive) { library.clearKeys() }
+            } message: {
+                Text("Removes your imported encryption keys. You'll need to re-import prod.keys to launch games.")
             }
             .sheet(isPresented: $showingAbout) { aboutView }
         }
@@ -102,6 +116,20 @@ struct SettingsView: View {
             LabeledContent("Games", value: "\(library.games.count)")
             LabeledContent("Total Size", value: ByteCountFormatter.string(fromByteCount: library.totalSize, countStyle: .file))
             LabeledContent("Keys", value: library.keysImported ? "Imported" : "Missing")
+
+            Button(role: .destructive) {
+                showingClearGamesAlert = true
+            } label: {
+                Label("Remove All Games", systemImage: "trash")
+            }
+            .disabled(library.games.isEmpty)
+
+            Button(role: .destructive) {
+                showingClearKeysAlert = true
+            } label: {
+                Label("Delete prod.keys", systemImage: "key.slash")
+            }
+            .disabled(!library.keysImported)
         }
     }
 

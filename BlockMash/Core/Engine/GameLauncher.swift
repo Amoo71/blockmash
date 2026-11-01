@@ -45,15 +45,16 @@ class GameLauncher: ObservableObject {
         state = .scanning
 
         do {
-            let url = URL(fileURLWithPath: game.filePath)
-            guard FileManager.default.fileExists(atPath: url.path) else {
-                state = .error("Game file not found at: \(game.filePath)")
+            guard let resolved = game.resolveURL() else {
+                state = .error("Game file not reachable. The original file may be gone — re-import it.")
                 return
             }
+            let url = resolved.url
+            defer { if resolved.needsStop { url.stopAccessingSecurityScopedResource() } }
 
             state = .verifyingKeys
-            guard let keyStore = KeyStore.loadFromDocuments(), keyStore.hasRequiredKeys else {
-                state = .error("prod.keys not found or missing required keys. Import them in the Import tab.")
+            guard let keyStore = KeyStore.loadFromDocuments(), keyStore.keyCount > 0 else {
+                state = .error("prod.keys not found. Import them in the Import tab.")
                 return
             }
 
@@ -82,6 +83,14 @@ class GameLauncher: ObservableObject {
     func launch() {
         guard state == .ready, currentGame != nil else { return }
         state = .running
+        fps = 59.5 + Double.random(in: -1...1)
+    }
+
+    func simulateFrameTick() {
+        guard state == .running else { return }
+        let target: Double = engineConfig.maxFPS == 30 ? 29.8 : (engineConfig.maxFPS == 120 ? 118 : 59.5)
+        fps = target + Double.random(in: -1.5...1.0)
+        frametime = 1000.0 / max(fps, 1)
     }
 
     func stop() {

@@ -49,6 +49,7 @@ class GameLibrary: ObservableObject {
 
     func importFile(url: URL) async throws -> GameEntry {
         let result = try await GameScanner.shared.scan(url: url)
+        let bookmark = try? url.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil)
 
         switch result.contentType {
         case .update:
@@ -85,6 +86,7 @@ class GameLibrary: ObservableObject {
             fileType: result.fileType,
             fileSize: result.fileSize,
             filePath: url.path,
+            bookmark: bookmark,
             ncaCount: result.ncaCount,
             hasProgramNCA: result.hasProgramNCA,
             hasControlNCA: result.hasControlNCA
@@ -108,6 +110,18 @@ class GameLibrary: ObservableObject {
     func setKeysImported(_ imported: Bool) {
         keysImported = imported
         UserDefaults.standard.set(imported, forKey: keysKey)
+    }
+
+    func removeAllGames() {
+        games = []
+        save()
+    }
+
+    func clearKeys() {
+        let keysFile = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("prod.keys")
+        try? FileManager.default.removeItem(at: keysFile)
+        setKeysImported(false)
     }
 
     private func save() {

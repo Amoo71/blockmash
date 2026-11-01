@@ -96,12 +96,23 @@ struct GameRowView: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(game.title)
-                    .font(.body.bold())
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(game.title)
+                        .font(.body.bold())
+                        .lineLimit(1)
+                    if !game.fileExists {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                            .font(.caption)
+                    }
+                }
                 HStack(spacing: 8) {
                     Label(game.fileType.rawValue, systemImage: game.fileType.icon)
                     Text(game.formattedSize)
+                    if !game.fileExists {
+                        Text("File missing")
+                            .foregroundStyle(.orange)
+                    }
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)

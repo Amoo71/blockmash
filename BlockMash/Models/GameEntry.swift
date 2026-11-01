@@ -8,6 +8,7 @@ struct GameEntry: Identifiable, Codable, Hashable {
     var fileType: GameFileType
     var fileSize: Int64
     var filePath: String
+    var bookmark: Data?
     var dateAdded: Date
     var lastPlayed: Date?
     var playTime: TimeInterval
@@ -24,6 +25,7 @@ struct GameEntry: Identifiable, Codable, Hashable {
         fileType: GameFileType,
         fileSize: Int64,
         filePath: String,
+        bookmark: Data? = nil,
         ncaCount: Int = 0,
         hasProgramNCA: Bool = false,
         hasControlNCA: Bool = false
@@ -35,6 +37,7 @@ struct GameEntry: Identifiable, Codable, Hashable {
         self.fileType = fileType
         self.fileSize = fileSize
         self.filePath = filePath
+        self.bookmark = bookmark
         self.dateAdded = Date()
         self.lastPlayed = nil
         self.playTime = 0
@@ -43,6 +46,22 @@ struct GameEntry: Identifiable, Codable, Hashable {
         self.ncaCount = ncaCount
         self.hasProgramNCA = hasProgramNCA
         self.hasControlNCA = hasControlNCA
+    }
+
+    func resolveURL() -> (url: URL, needsStop: Bool)? {
+        if let data = bookmark {
+            var isStale = false
+            if let url = try? URL(resolvingBookmarkData: data, options: [], relativeTo: nil, bookmarkDataIsStale: &isStale),
+               !isStale {
+                let ok = url.startAccessingSecurityScopedResource()
+                return (url, ok)
+            }
+        }
+        let url = URL(fileURLWithPath: filePath)
+        if FileManager.default.fileExists(atPath: filePath) {
+            return (url, false)
+        }
+        return nil
     }
 
     var formattedSize: String {
@@ -58,11 +77,21 @@ struct GameEntry: Identifiable, Codable, Hashable {
     }
 
     var isLaunchable: Bool {
-        hasProgramNCA && FileManager.default.fileExists(atPath: filePath)
+        hasProgramNCA && fileExists
     }
 
     var fileExists: Bool {
-        FileManager.default.fileExists(atPath: filePath)
+        if FileManager.default.fileExists(atPath: filePath) { return true }
+        if let data = bookmark {
+            var isStale = false
+            if let url = try? URL(resolvingBookmarkData: data, options: [], relativeTo: nil, bookmarkDataIsStale: &isStale),
+               !isStale {
+                let ok = url.startAccessingSecurityScopedResource()
+                defer { if ok { url.stopAccessingSecurityScopedResource() } }
+                return FileManager.default.fileExists(atPath: url.path)
+            }
+        }
+        return false
     }
 }
 

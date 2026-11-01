@@ -20,6 +20,20 @@ struct GameDetailView: View {
         }
         .navigationTitle(game.title)
         .navigationBarTitleDisplayMode(.inline)
+        .fullScreenCover(isPresented: isRunning) {
+            GameRunningView(game: game, launcher: launcher) {
+                launcher.stop()
+            }
+        }
+    }
+
+    private var isRunning: Binding<Bool> {
+        Binding(
+            get: { launcher.state == .running },
+            set: { newValue in
+                if !newValue { launcher.stop() }
+            }
+        )
     }
 
     private var headerSection: some View {
@@ -91,19 +105,10 @@ struct GameDetailView: View {
                 .tint(.green)
 
             case .running:
-                VStack(spacing: 8) {
-                    HStack {
-                        Label("Running", systemImage: "play.fill")
-                            .foregroundStyle(.green)
-                        Spacer()
-                        Text("\(Int(launcher.fps)) FPS")
-                            .font(.caption.monospaced())
-                    }
-                    Button(role: .destructive) {
-                        launcher.stop()
-                    } label: {
-                        Label("Stop", systemImage: "stop.fill")
-                    }
+                HStack {
+                    Label("Running — \(Int(launcher.fps)) FPS", systemImage: "play.fill")
+                        .foregroundStyle(.green)
+                    Spacer()
                 }
 
             case .error(let msg):
