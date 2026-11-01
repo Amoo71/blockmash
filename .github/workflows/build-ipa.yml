@@ -45,6 +45,18 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             ONLY_ACTIVE_ARCH=NO | tail -20
 
+      - name: Patch binary for LiveContainer
+        run: |
+          BINARY="build/Build/Products/Release-iphoneos/BlockMash.app/BlockMash"
+          echo "Before patching:"
+          otool -h "$BINARY" | head -8
+          # Mach-O header offset 12 = filetype
+          # MH_EXECUTE = 0x02 -> MH_DYLIB = 0x06
+          # This lets LiveContainer dlopen() the binary
+          printf '\x06' | dd of="$BINARY" bs=1 seek=12 count=1 conv=notrunc 2>&1
+          echo "After patching:"
+          otool -h "$BINARY" | head -8
+
       - name: Package IPA
         run: |
           mkdir -p export/Payload
