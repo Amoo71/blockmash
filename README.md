@@ -1,41 +1,46 @@
 # SwitchMirror
 
-An ad-free 16:9 receiver prototype and iOS capture research starter for experimenting with Nintendo Switch browser display mirroring.
+An experimental, ad-free iPhone-to-Nintendo-Switch browser mirroring project.
 
-## Project status
+## Current implementation
 
-**Prototype only — live mirroring is not implemented.** The receiver page is a static layout. The sender test checks browser capture availability. The Swift file is an experimental capture scaffold; it does not yet encode, signal, or transmit frames.
+- English 16:9 receiver page at `/`.
+- iPhone sender page at `/sender.html`, using the browser's screen-sharing API when the iOS browser exposes it.
+- A Cloudflare Durable Object WebSocket relay in `worker/` forwards JPEG frames between a sender and receiver in the same six-digit room.
+- The receiver draws incoming JPEG frames to a canvas, avoiding a dependency on WebRTC in the Switch browser.
 
-## Web receiver — Cloudflare Pages
+**Experimental, not yet device-validated.** iOS Safari screen-capture availability and full-device capture behavior must be tested on the exact iOS 27 build. The Switch captive browser is old and may have performance or API limitations. This prototype sends video frames only (no audio), defaults to 720p at roughly 10 fps, and offers 1080p as an experimental option. It is not native AirPlay and is not a replacement for a certified AirPlay receiver.
 
-This is a static site. In Cloudflare, create a **Workers & Pages → Create → Pages → Connect to Git** project and select `Amoo71/blockmash` on branch `main`.
+## Deploy the website
 
-Use these settings:
+Create a Cloudflare Pages project connected to this repository:
 - Framework preset: **None**
-- Build command: **Leave empty**
+- Build command: **leave empty**
 - Build output directory: **/** (repository root)
 
-The root `index.html` is the receiver page. No ads, analytics, or third-party trackers are included. The repository includes `wrangler.toml` and `_headers` for static hosting configuration. A Cloudflare account connection and project creation are still required; this repository change does not deploy the site by itself.
+The website files are static. Deploying Pages does not deploy the relay.
 
-## iOS build — unsigned IPA artifact
+## Deploy the WebSocket relay
 
-The XcodeGen project definition is `ios/project.yml`. A GitHub Actions workflow at `.github/workflows/ios-unsigned-ipa.yml` builds an **unsigned** device IPA when manually dispatched or when iOS source files change.
+From the repository root, run:
 
-To run it, open the repository's **Actions** tab, select **Build unsigned iOS IPA**, and choose **Run workflow**. Download the `SwitchMirror-unsigned-IPA` artifact from the completed run.
+```sh
+cd worker
+npx wrangler deploy
+```
 
-An unsigned IPA is a build artifact, not a signed App Store/ad-hoc package. Whether LiveContainer accepts and can run it depends on its import/signing behavior and the target iOS version. No successful physical-device build or LiveContainer test is claimed yet.
+This requires a Cloudflare account and authorization in Wrangler. After deployment, copy the worker URL, for example `wss://switchmirror-relay.<your-subdomain>.workers.dev`.
 
-## iOS capture experiment and LiveContainer
+Open the receiver page on the Switch and sender page on the iPhone. Enter the same six-digit room code and the relay URL on both pages. Use HTTPS for Pages and WSS for the relay.
 
-The current Swift source is experimental. Screen-capture API availability varies by iOS version and execution environment. LiveContainer does not support all app-extension workflows; this source does not guarantee full-device capture inside LiveContainer. No ReplayKit Broadcast Upload Extension is included.
+## iOS app / IPA status
 
-## Remaining engineering work
+The `ios/` folder and unsigned IPA workflow remain an experimental native-capture investigation. The IPA workflow does not produce a signed installable app, and the native app is not yet connected to the JPEG relay. The browser sender is a separate proof-of-concept path. No successful physical-device or LiveContainer test is claimed.
 
-1. Compile the project and fix any SDK/API availability errors surfaced by the macOS build runner.
-2. Validate capture on the physical target iPhone and exact iOS build.
-3. Convert captured sample buffers into a video track and implement transport.
-4. Add authenticated, short-lived pairing and signalling over HTTPS/WSS.
-5. Implement receiver offer/answer and ICE handling, then test actual WebRTC/codec support in the Switch DNS browser.
-6. Measure latency and adapt resolution/frame rate; 1080p30 is a target, not a guarantee.
+## Known limitations
 
-The current receiver is not yet capable of showing a live iPhone screen.
+- Browser screen capture depends on iOS Safari exposing `getDisplayMedia`; if it is unavailable, the sender page cannot capture the screen.
+- The browser may require the user to explicitly select what to share and may stop capture when backgrounded.
+- No audio, touch-back/control channel, encryption beyond HTTPS/WSS transport, or user accounts.
+- Six-digit room codes are for convenience, not strong authentication. Use a random code and do not share it publicly.
+- No relay deployment, Switch compatibility test, or 1080p performance test has been completed.
