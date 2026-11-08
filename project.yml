@@ -1,6 +1,6 @@
-name: Pledo
+name: Plexo
 options:
-  bundleIdPrefix: io.github.pledo
+  bundleIdPrefix: io.github.plexo
   deploymentTarget:
     iOS: "16.0"
   createIntermediateGroups: true
@@ -68,26 +68,30 @@ targets:
         OTHER_CFLAGS: "$(inherited) -Wno-everything"
         SKIP_INSTALL: YES
         CODE_SIGNING_ALLOWED: NO
-  Pledo:
+  Plexo:
     type: application
     platform: iOS
     sources:
-      - path: Pledo
+      - path: Plexo
     dependencies:
       - target: UnRAR
       - package: ZIPFoundation
     info:
-      path: Pledo/Info.plist
+      path: Plexo/Info.plist
       properties:
-        CFBundleDisplayName: Pledo
+        CFBundleDisplayName: Plexo
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
+        CFBundleURLTypes:
+          - CFBundleURLName: io.github.plexo.ios
+            CFBundleURLSchemes:
+              - plexo
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
         UISupportsDocumentBrowser: false
         ITSAppUsesNonExemptEncryption: false
-        NSLocalNetworkUsageDescription: "Pledo verbindet sich mit Plex-Servern in deinem lokalen Netzwerk."
+        NSLocalNetworkUsageDescription: "Plexo lädt Dateien auch von Servern in deinem lokalen Netzwerk."
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
           NSAllowsLocalNetworking: true
@@ -102,8 +106,8 @@ targets:
           - UIInterfaceOrientationLandscapeRight
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: io.github.pledo.ios
-        PRODUCT_NAME: Pledo
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.plexo.ios
+        PRODUCT_NAME: Plexo
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: NO
@@ -111,6 +115,6 @@ targets:
         CODE_SIGNING_REQUIRED: NO
         CODE_SIGN_IDENTITY: ""
         ENABLE_BITCODE: NO
-        SWIFT_OBJC_BRIDGING_HEADER: Pledo/Pledo-Bridging-Header.h
+        SWIFT_OBJC_BRIDGING_HEADER: Plexo/Plexo-Bridging-Header.h
         HEADER_SEARCH_PATHS: "$(SRCROOT)/Vendor/RarBridge"
         OTHER_LDFLAGS: "$(inherited) -lc++"

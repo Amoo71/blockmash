@@ -3,4 +3,4 @@ build/
 Payload/
 *.ipa
 .DS_Store
-Pledo/Info.plist
+Plexo/Info.plist

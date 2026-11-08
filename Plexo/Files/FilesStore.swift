@@ -33,7 +33,7 @@ final class FilesStore: ObservableObject {
     private var reporter: OperationReporter?
     private let defaultsKey = "linkedFolders"
 
-    var documentsURL: URL { DownloadManager.documentsURL }
+    var documentsURL: URL { AppPaths.documents }
 
     private init() {
         if let data = UserDefaults.standard.data(forKey: defaultsKey),

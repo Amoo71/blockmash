@@ -24,8 +24,8 @@ struct FilesView: View {
         NavigationStack {
             List {
                 Section("Auf diesem Gerät") {
-                    NavigationLink(value: FolderLocation(url: files.documentsURL, title: "Pledo")) {
-                        Label("Pledo-Ordner (Downloads)", systemImage: "iphone")
+                    NavigationLink(value: FolderLocation(url: files.documentsURL, title: "Plexo")) {
+                        Label("Plexo-Ordner", systemImage: "iphone")
                     }
                 }
                 Section {
@@ -48,7 +48,7 @@ struct FilesView: View {
                 } header: {
                     Text("Verknüpfte Ordner")
                 } footer: {
-                    Text("Wähle einen beliebigen Ordner aus der Dateien-App, z. B. „Auf meinem iPhone“ › Downloads, iCloud Drive oder einen USB-Stick. Pledo kann dort dann Dateien entpacken, verschieben, kopieren und löschen. Zum Entfernen nach links wischen.")
+                    Text("Wähle einen beliebigen Ordner aus der Dateien-App, z. B. „Auf meinem iPhone“ › Downloads, iCloud Drive oder einen USB-Stick. Plexo kann dort dann Dateien entpacken, verschieben, kopieren und löschen. Zum Entfernen nach links wischen.")
                 }
             }
             .navigationTitle("Dateien")
@@ -440,8 +440,8 @@ struct FolderPickerSheet: View {
         NavigationStack {
             List {
                 Section("Auf diesem Gerät") {
-                    NavigationLink(value: FolderLocation(url: files.documentsURL, title: "Pledo")) {
-                        Label("Pledo-Ordner", systemImage: "iphone")
+                    NavigationLink(value: FolderLocation(url: files.documentsURL, title: "Plexo")) {
+                        Label("Plexo-Ordner", systemImage: "iphone")
                     }
                 }
                 if !files.linkedFolders.isEmpty {

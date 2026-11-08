@@ -31,8 +31,8 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild \
-            -project Pledo.xcodeproj \
-            -scheme Pledo \
+            -project Plexo.xcodeproj \
+            -scheme Plexo \
             -configuration Release \
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
@@ -41,15 +41,15 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             build 2>&1 | tee build.log | grep -E "error:|warning: unre|BUILD (SUCCEEDED|FAILED)|\*\*" || true
-          test -d build/Build/Products/Release-iphoneos/Pledo.app || { grep -E "error" build.log | head -50; exit 1; }
+          test -d build/Build/Products/Release-iphoneos/Plexo.app || { grep -E "error" build.log | head -50; exit 1; }
 
       - name: IPA packen
         run: |
-          rm -rf Payload Pledo.ipa
+          rm -rf Payload Plexo.ipa
           mkdir Payload
-          cp -R build/Build/Products/Release-iphoneos/Pledo.app Payload/
-          zip -qry Pledo.ipa Payload
-          ls -lh Pledo.ipa
+          cp -R build/Build/Products/Release-iphoneos/Plexo.app Payload/
+          zip -qry Plexo.ipa Payload
+          ls -lh Plexo.ipa
 
       - name: Build-Log hochladen
         if: always()
@@ -62,8 +62,8 @@ jobs:
       - name: IPA als Artifact hochladen
         uses: actions/upload-artifact@v4
         with:
-          name: Pledo-ipa
-          path: Pledo.ipa
+          name: Plexo-ipa
+          path: Plexo.ipa
 
       - name: Release "latest" aktualisieren
         env:
@@ -71,8 +71,8 @@ jobs:
         run: |
           gh release delete latest --yes --cleanup-tag || true
           sleep 3
-          gh release create latest Pledo.ipa \
+          gh release create latest Plexo.ipa \
             --target "${GITHUB_SHA}" \
-            --title "Pledo iOS – neuester Build" \
+            --title "Plexo iOS – neuester Build" \
             --notes "Automatisch gebaut aus ${GITHUB_SHA::7} (Branch ${GITHUB_REF_NAME}). Unsignierte IPA für LiveContainer / SideStore / AltStore." \
             --prerelease
