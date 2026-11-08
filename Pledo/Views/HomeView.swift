@@ -4,6 +4,7 @@ struct HomeView: View {
     @EnvironmentObject private var store: LibraryStore
     @EnvironmentObject private var downloads: DownloadManager
     @State private var showLogin = false
+    @State private var showSettings = false
 
     var body: some View {
         NavigationStack {
@@ -67,6 +68,18 @@ struct HomeView: View {
             .navigationTitle("Pledo")
             .refreshable { await store.sync(full: false) }
             .sheet(isPresented: $showLogin) { LoginView().environmentObject(store) }
+            .sheet(isPresented: $showSettings) {
+                SettingsView().environmentObject(store).environmentObject(downloads)
+            }
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                    }
+                }
+            }
             .mediaDestinations()
         }
     }

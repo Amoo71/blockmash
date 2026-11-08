@@ -4,17 +4,78 @@ options:
   deploymentTarget:
     iOS: "16.0"
   createIntermediateGroups: true
+packages:
+  ZIPFoundation:
+    url: https://github.com/weichsel/ZIPFoundation
+    from: "0.9.19"
 settings:
   base:
     SWIFT_VERSION: "5.0"
     MARKETING_VERSION: "1.0.0"
     CURRENT_PROJECT_VERSION: "1"
 targets:
+  UnRAR:
+    type: library.static
+    platform: iOS
+    sources:
+      - path: Vendor/unrar
+        excludes:
+          - "arccmt.cpp"
+          - "blake2s_sse.cpp"
+          - "blake2sp.cpp"
+          - "cmdfilter.cpp"
+          - "cmdmix.cpp"
+          - "coder.cpp"
+          - "crypt1.cpp"
+          - "crypt2.cpp"
+          - "crypt3.cpp"
+          - "crypt5.cpp"
+          - "hardlinks.cpp"
+          - "isnt.cpp"
+          - "log.cpp"
+          - "model.cpp"
+          - "rarpch.cpp"
+          - "recvol3.cpp"
+          - "recvol5.cpp"
+          - "suballoc.cpp"
+          - "threadmisc.cpp"
+          - "uicommon.cpp"
+          - "uiconsole.cpp"
+          - "uisilent.cpp"
+          - "ulinks.cpp"
+          - "unpack15.cpp"
+          - "unpack20.cpp"
+          - "unpack30.cpp"
+          - "unpack50.cpp"
+          - "unpack50frag.cpp"
+          - "unpack50mt.cpp"
+          - "unpackinline.cpp"
+          - "uowners.cpp"
+          - "win32acl.cpp"
+          - "win32lnk.cpp"
+          - "win32stm.cpp"
+          - "*.txt"
+      - path: Vendor/RarBridge
+    settings:
+      base:
+        PRODUCT_NAME: UnRAR
+        CLANG_CXX_LANGUAGE_STANDARD: gnu++17
+        CLANG_CXX_LIBRARY: libc++
+        GCC_WARN_INHIBIT_ALL_WARNINGS: YES
+        RUN_CLANG_STATIC_ANALYZER: NO
+        HEADER_SEARCH_PATHS: "$(SRCROOT)/Vendor/unrar"
+        OTHER_CPLUSPLUSFLAGS: "$(inherited) -DSILENT -DRARDLL -Wno-everything"
+        OTHER_CFLAGS: "$(inherited) -Wno-everything"
+        SKIP_INSTALL: YES
+        CODE_SIGNING_ALLOWED: NO
   Pledo:
     type: application
     platform: iOS
     sources:
       - path: Pledo
+    dependencies:
+      - target: UnRAR
+      - package: ZIPFoundation
     info:
       path: Pledo/Info.plist
       properties:
@@ -50,3 +111,6 @@ targets:
         CODE_SIGNING_REQUIRED: NO
         CODE_SIGN_IDENTITY: ""
         ENABLE_BITCODE: NO
+        SWIFT_OBJC_BRIDGING_HEADER: Pledo/Pledo-Bridging-Header.h
+        HEADER_SEARCH_PATHS: "$(SRCROOT)/Vendor/RarBridge"
+        OTHER_LDFLAGS: "$(inherited) -lc++"

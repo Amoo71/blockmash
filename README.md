@@ -18,6 +18,15 @@ Lädt Filme, Serien, Staffeln, einzelne Episoden und Playlists von allen Plex-Se
 | „Im Browser herunterladen“ | ✅ als „Direktlink kopieren / im Browser öffnen“ (lange auf eine Version drücken) |
 | Suche | ✅ über Filme, Serien und Episoden |
 
+### Dateien-Tab (Dateimanager)
+
+- Pledo-Ordner durchsuchen und beliebige **Ordner vom iPhone verknüpfen** (Auf meinem iPhone, iCloud Drive, USB-Stick …)
+- **ZIP entpacken** und **ZIP erstellen** (einzelne Dateien, Ordner oder Mehrfachauswahl)
+- **RAR entpacken** (RAR4 + RAR5, mehrteilige Archive `.part1.rar`, passwortgeschützte Archive)
+- **Neuer Ordner, Umbenennen, Verschieben, Kopieren, Löschen** – einzeln (lange drücken / wischen) oder per Mehrfachauswahl
+- Dateien aus der Dateien-App **importieren**, Vorschau (QuickLook), Teilen / Öffnen in anderen Apps
+- Fortschrittsanzeige mit Abbrechen
+
 Heruntergeladene Dateien landen im Dokumente-Ordner der App (`Filme/…`, `Serien/<Serie>/Season N/…`) und sind in der **Dateien-App** sichtbar. Von dort kannst du sie z. B. mit VLC oder Infuse abspielen.
 
 ## IPA herunterladen
@@ -35,6 +44,7 @@ Ein neuer Build entsteht bei jedem Push oder manuell über *Actions → Build iO
 
 - iOS pausiert Downloads, sobald die App im Hintergrund ist. Lass Pledo offen; die Option *Bildschirm während Downloads anlassen* ist standardmäßig an. Abgebrochene Verbindungen werden automatisch fortgesetzt (5 Versuche, wie bei pledo).
 - In LiveContainer liegen die Dateien unter *Dateien → LiveContainer → Data → Application → … → Documents*.
+- Falls „Ordner verknüpfen“ bzw. der Datei-Import in LiveContainer nicht reagiert: in LiveContainer die App lange drücken → Einstellungen → **„Fix File Picker“** aktivieren.
 - Die IPA ist unsigniert. LiveContainer signiert sie selbst; für AltStore/SideStore funktioniert sie ebenfalls.
 
 ## Aufbau
@@ -44,7 +54,10 @@ project.yml                  XcodeGen-Projektdefinition
 Pledo/PlexClient.swift       plex.tv- und Plex-Server-API (Login, Ressourcen, Bibliotheken, Paging)
 Pledo/LibraryStore.swift     Metadaten-Cache und Sync
 Pledo/DownloadManager.swift  Download-Warteschlange, Wiederholungen, Dateipfade
+Pledo/Files/                 Dateimanager (Operationen, ZIP via ZIPFoundation, RAR)
 Pledo/Views/                 SwiftUI-Oberfläche
+Vendor/unrar/                offizieller UnRAR-Quellcode (RARLAB, nur Entpacken – siehe license.txt)
+Vendor/RarBridge/            kleine C-Brücke zwischen unrar und Swift
 .github/workflows/build-ipa.yml  macOS-Build → Pledo.ipa
 ```
 

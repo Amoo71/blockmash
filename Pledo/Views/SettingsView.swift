@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var store: LibraryStore
     @EnvironmentObject private var downloads: DownloadManager
+    @Environment(\.dismiss) private var dismiss
 
     @AppStorage(Prefs.moviesFolderKey) private var moviesFolder = Prefs.defaultMoviesFolder
     @AppStorage(Prefs.showsFolderKey) private var showsFolder = Prefs.defaultShowsFolder
@@ -86,6 +87,11 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Einstellungen")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Fertig") { dismiss() }
+                }
+            }
             .confirmationDialog("Abmelden und alle Metadaten löschen?", isPresented: $confirmLogout,
                                 titleVisibility: .visible) {
                 Button("Abmelden", role: .destructive) {

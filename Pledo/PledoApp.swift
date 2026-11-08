@@ -4,12 +4,14 @@ import SwiftUI
 struct PledoApp: App {
     @StateObject private var store = LibraryStore.shared
     @StateObject private var downloads = DownloadManager.shared
+    @StateObject private var files = FilesStore.shared
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environmentObject(store)
                 .environmentObject(downloads)
+                .environmentObject(files)
                 .task {
                     downloads.resumePendingDownloads()
                     await store.onLaunch()
@@ -32,8 +34,8 @@ struct RootView: View {
             DownloadsView()
                 .tabItem { Label("Downloads", systemImage: "arrow.down.circle") }
                 .badge(downloads.pendingCount)
-            SettingsView()
-                .tabItem { Label("Einstellungen", systemImage: "gearshape") }
+            FilesView()
+                .tabItem { Label("Dateien", systemImage: "folder") }
         }
         .tint(Color(red: 0.90, green: 0.63, blue: 0.05))
     }
