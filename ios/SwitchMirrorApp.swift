@@ -80,7 +80,7 @@ final class CaptureModel: NSObject, ObservableObject, SCContentSharingPickerObse
         Task { @MainActor in self.status = "Screen selection cancelled" }
     }
 
-    @objc nonisolated func contentSharingPickerStartDidFailWithError(_ error: NSError) {
+    nonisolated func contentSharingPickerStartDidFailWithError(_ error: any Error) {
         Task { @MainActor in self.status = "Picker failed: \(error.localizedDescription)" }
     }
 }
