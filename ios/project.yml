@@ -2,7 +2,7 @@ name: SwitchMirror
 options:
   bundleIdPrefix: com.amoo71
   deploymentTarget:
-    iOS: "18.0"
+    iOS: "27.0"
 targets:
   SwitchMirror:
     type: application
@@ -20,5 +20,5 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: SwitchMirror
         INFOPLIST_KEY_UIUserInterfaceStyle: Dark
-        INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "Not used by the current prototype."
-        IPHONEOS_DEPLOYMENT_TARGET: "18.0"
+        INFOPLIST_KEY_NSScreenCaptureUsageDescription: "SwitchMirror needs permission to share your screen with your Nintendo Switch."
+        IPHONEOS_DEPLOYMENT_TARGET: "27.0"

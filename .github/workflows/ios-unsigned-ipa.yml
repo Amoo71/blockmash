@@ -9,14 +9,15 @@ on:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: xcode-27
     steps:
       - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Select Xcode
+      - name: Verify Xcode 27 and iOS SDK
         run: |
           xcodebuild -version
+          xcodebuild -showsdks
           xcode-select -p
 
       - name: Install XcodeGen
