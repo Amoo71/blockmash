@@ -86,6 +86,8 @@ actor DownloadJob {
     private let splittable: Bool
     private let fixedStreams: Int
     private let handler: Handler
+    /// Blöcke, die gerade von der Hintergrund-Session geladen werden – nicht anfassen.
+    private let reserved: Set<Int>
 
     private var blocks: [BlockState]
     private var totalBytes: Int64
@@ -114,7 +116,8 @@ actor DownloadJob {
     private var supervisor: Task<Void, Never>?
 
     init(record: DownloadRecord, url: URL, fd: Int32, enabled: Set<NetworkKind>, usable: Set<NetworkKind>,
-         handler: @escaping Handler) {
+         reserved: Set<Int> = [], handler: @escaping Handler) {
+        self.reserved = reserved
         self.id = record.id
         self.fd = fd
         self.url = url
@@ -216,7 +219,9 @@ actor DownloadJob {
 
     // MARK: - Streams pro Netzwerk
 
-    private var allComplete: Bool { blocks.allSatisfy(\.isComplete) }
+    private var allComplete: Bool {
+        blocks.indices.allSatisfy { reserved.contains($0) || blocks[$0].isComplete }
+    }
 
     private func streamCount(_ kind: NetworkKind) -> Int {
         streams.filter { $0.value.kind == kind && !stopping.contains($0.key) }.count
@@ -258,7 +263,7 @@ actor DownloadJob {
                 ceilings[kind] = (c.limit + 1, now)
             }
         }
-        let incomplete = blocks.filter { !$0.isComplete }.count
+        let incomplete = blocks.indices.filter { !reserved.contains($0) && !blocks[$0].isComplete }.count
         var totalStreams = streams.count - stopping.count
         for kind in NetworkKind.allCases {
             if !isAllowed(kind) {
@@ -287,6 +292,7 @@ actor DownloadJob {
     private func spawn(_ kind: NetworkKind) {
         let sid = nextId
         nextId += 1
+        DiagLog.add("Turbo: neuer Stream #\(sid) über \(kind.defaultName)")
         let task = Task { [weak self] () -> Void in
             guard let self else { return }
             await self.runStream(id: sid, kind: kind)
@@ -312,7 +318,7 @@ actor DownloadJob {
             return .stop
         }
         if allComplete { return .stop }
-        for i in blocks.indices where !blocks[i].isComplete && attemptsOn(i).isEmpty {
+        for i in blocks.indices where !reserved.contains(i) && !blocks[i].isComplete && attemptsOn(i).isEmpty {
             if !splittable {
                 blocks[i].done = 0
                 blocks[i].byNetwork = [:]
@@ -341,7 +347,7 @@ actor DownloadJob {
         let streamsHere = max(1, streamCount(kind))
         let mySpeed = (speeds[kind] ?? 0) / Double(streamsHere)
         var best: (index: Int, eta: Double)?
-        for (i, b) in blocks.enumerated() where !b.isComplete {
+        for (i, b) in blocks.enumerated() where !b.isComplete && !reserved.contains(i) {
             let running = attemptsOn(i)
             guard running.count == 1, (hedges[i] ?? 0) < 2, let length = b.length else { continue }
             let a = running[0]
@@ -411,6 +417,7 @@ actor DownloadJob {
         if stopped { return .retire }
         lastError = error.localizedDescription
         networkErrors[kind] = error.localizedDescription
+        DiagLog.add("Turbo: \(kind.defaultName) Stream #\(sid) Fehler: \(error.localizedDescription)")
 
         if let posix = error as? POSIXError, posix.code == .ENOSPC {
             fail("Kein Speicherplatz mehr frei")
@@ -436,6 +443,7 @@ actor DownloadJob {
         }
         failures[kind, default: 0] += 1
         if (failures[kind] ?? 0) >= 12 {
+            DiagLog.add("Turbo: \(kind.defaultName) nach 12 Fehlern für 30 s pausiert")
             failedNetworks.insert(kind)
             failedAt[kind] = Date()
             stopping.insert(sid)

@@ -118,18 +118,29 @@ final class HTTPConnection: @unchecked Sendable {
     func start(timeout: TimeInterval = 20) async throws {
         if started { return }
         started = true
+        let kindName = kind.defaultName
+        let hostName = host
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
                 let once = Once()
                 connection.stateUpdateHandler = { [weak self] state in
                     switch state {
                     case .ready:
-                        once.run { cont.resume() }
+                        once.run {
+                            let path = self?.connection.currentPath
+                            let iface = path?.availableInterfaces.first?.name ?? "?"
+                            DiagLog.add("Verbindung \(kindName) bereit über \(iface) → \(hostName)")
+                            cont.resume()
+                        }
                     case .failed(let error):
-                        once.run { cont.resume(throwing: HTTPError.connectionFailed(error.localizedDescription)) }
+                        once.run {
+                            DiagLog.add("Verbindung \(kindName) fehlgeschlagen: \(error.localizedDescription)")
+                            cont.resume(throwing: HTTPError.connectionFailed(error.localizedDescription))
+                        }
                     case .waiting(let error):
                         // Mobilfunk-Modem wacht noch auf o. Ä. – weiter warten, bis "ready" oder Timeout.
                         self?.waitingReason = error.localizedDescription
+                        DiagLog.add("Verbindung \(kindName) wartet: \(error.localizedDescription)")
                     case .cancelled:
                         once.run { cont.resume(throwing: CancellationError()) }
                     default:
@@ -140,6 +151,7 @@ final class HTTPConnection: @unchecked Sendable {
                 queue.asyncAfter(deadline: .now() + timeout) { [weak self] in
                     once.run {
                         let reason = self?.waitingReason
+                        DiagLog.add("Verbindung \(kindName) Timeout\(reason.map { " (\($0))" } ?? "")")
                         self?.connection.cancel()
                         if let reason {
                             cont.resume(throwing: HTTPError.connectionFailed(reason))

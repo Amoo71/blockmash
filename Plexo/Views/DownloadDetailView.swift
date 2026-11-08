@@ -63,6 +63,9 @@ struct DownloadDetailView: View {
                                     .buttonStyle(.bordered)
                             }
                         }
+                        if r.engine == .background, let why = downloads.turboBlocker(r) {
+                            Text("Warum kein Turbo: \(why)").font(.caption).foregroundStyle(.orange)
+                        }
                     }
                     if r.state != .completed && r.totalBytes > 0 && !r.supportsRanges {
                         Label("Server unterstützt keine Teil-Downloads – nur ein Netzwerk, keine Fortsetzung.",

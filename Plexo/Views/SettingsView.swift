@@ -83,6 +83,12 @@ struct SettingsView: View {
                     Text("Torrents laufen, solange Plexo geöffnet ist (iOS erlaubt Torrent-Verbindungen nicht im Hintergrund). Fortschritt bleibt erhalten und geht beim nächsten Öffnen weiter.")
                 }
 
+                Section {
+                    NavigationLink("Diagnose-Protokoll") { DiagLogView() }
+                } footer: {
+                    Text("Zeigt, welches Netzwerk wann verbunden, gewartet oder versagt hat – hilfreich, wenn Mobilfunk nicht mitlädt.")
+                }
+
                 Section("Info") {
                     LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")
                     Link("Original: anmolkapil/plexo", destination: URL(string: "https://github.com/anmolkapil/plexo")!)

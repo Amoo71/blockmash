@@ -106,8 +106,23 @@ final class DownloadManager: ObservableObject {
     }
 
     /// Turbo ist möglich: mindestens zwei ausgewählte Netzwerke sind nutzbar und die App ist vorne.
-    func canTurbo(_ r: DownloadRecord) -> Bool {
-        !isBackground && r.networks.filter { monitor.isUsable($0) }.count >= 2
+    func canTurbo(_ r: DownloadRecord) -> Bool { turboBlocker(r) == nil }
+
+    /// Warum Turbo (mehrere Netzwerke) gerade nicht möglich ist – nil = möglich.
+    func turboBlocker(_ r: DownloadRecord) -> String? {
+        if isBackground { return "App ist im Hintergrund" }
+        if !r.supportsRanges && !r.blocks.isEmpty { return "Server unterstützt keine Teil-Downloads (nur 1 Verbindung möglich)" }
+        let usable = r.networks.filter { monitor.isUsable($0) }
+        if usable.count >= 2 { return nil }
+        var reasons: [String] = []
+        for kind in [NetworkKind.wifi, .cellular] {
+            if !r.networks.contains(kind) {
+                reasons.append("\(monitor.name(kind)): für diesen Download aus")
+            } else if !monitor.isUsable(kind) {
+                reasons.append("\(monitor.name(kind)): \(monitor.status(kind).label)")
+            }
+        }
+        return "Nur ein Netzwerk nutzbar – " + reasons.joined(separator: ", ")
     }
 
     private var cellularAllowed: Bool {
@@ -190,6 +205,9 @@ final class DownloadManager: ObservableObject {
                     self.discardSegments(&current)
                     try self.launchTurbo(current, url: probe.finalURL)
                 } else {
+                    if current.turbo, let why = self.turboBlocker(current) {
+                        DiagLog.add("Kein Turbo für \(current.fileName): \(why)")
+                    }
                     self.launchBackground(current)
                 }
             } catch {
@@ -222,7 +240,7 @@ final class DownloadManager: ObservableObject {
 
     // MARK: - Turbo-Engine
 
-    private func launchTurbo(_ record: DownloadRecord, url: URL) throws {
+    private func launchTurbo(_ record: DownloadRecord, url: URL, reserved: Set<Int> = []) throws {
         var r = record
         let fd = open(partURL(r).path, O_RDWR | O_CREAT, 0o644)
         if fd < 0 { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
@@ -234,7 +252,9 @@ final class DownloadManager: ObservableObject {
         r.engine = .turbo
         update(r)
         let id = r.id
-        let job = DownloadJob(record: r, url: url, fd: fd, enabled: Set(r.networks), usable: usableNetworks()) { event in
+        DiagLog.add("Turbo gestartet: \(r.fileName) über \(r.networks.filter { monitor.isUsable($0) }.map { monitor.name($0) }.joined(separator: " + "))\(reserved.isEmpty ? "" : ", \(reserved.count) Blöcke laufen noch im Hintergrund")")
+        let job = DownloadJob(record: r, url: url, fd: fd, enabled: Set(r.networks), usable: usableNetworks(),
+                              reserved: reserved) { event in
             Task { @MainActor in DownloadManager.shared.handle(id, event) }
         }
         jobs[id] = job
@@ -252,7 +272,7 @@ final class DownloadManager: ObservableObject {
         switch event {
         case .progress(let blocks, let byNet, let l, let usage):
             guard r.state == .downloading, r.engine == .turbo else { return }
-            r.blocks = blocks
+            r.blocks = Self.mergeBlocks(r.blocks, blocks)
             r.bytesByNetwork = byNet
             update(r)
             live[id] = l
@@ -260,14 +280,22 @@ final class DownloadManager: ObservableObject {
         case .finished(let total, let blocks, let byNet):
             jobs[id] = nil
             live[id] = nil
-            r.blocks = blocks
+            r.blocks = Self.mergeBlocks(r.blocks, blocks)
             r.bytesByNetwork = byNet
             r.totalBytes = total
-            complete(r, file: partURL(r))
+            if r.segments.contains(where: { !$0.done }) {
+                // Turbo-Teil fertig, Rest läuft noch in der Hintergrund-Session.
+                r.engine = .background
+                update(r)
+                save(force: true)
+                checkBackgroundDone(id)
+            } else {
+                complete(r, file: partURL(r))
+            }
         case .failed(let message, let blocks, let byNet):
             jobs[id] = nil
             live[id] = nil
-            r.blocks = blocks
+            r.blocks = Self.mergeBlocks(r.blocks, blocks)
             r.bytesByNetwork = byNet
             if isBackground {
                 // Statt aufzugeben: an die Hintergrund-Session übergeben.
@@ -287,15 +315,31 @@ final class DownloadManager: ObservableObject {
     // MARK: - Hintergrund-Engine
 
     /// Teilt die noch fehlenden Blöcke in parallele Teile für die Background-URLSession.
-    private func buildSegments(_ r: DownloadRecord) -> [Segment] {
+    static let maxSegmentBytes: Int64 = 32 * 1024 * 1024
+
+    private static func mergeBlocks(_ a: [BlockState], _ b: [BlockState]) -> [BlockState] {
+        guard a.count == b.count else { return b }
+        return zip(a, b).map { x, y in y.done >= x.done ? y : x }
+    }
+
+    private func coveredBlocks(_ r: DownloadRecord) -> Set<Int> {
+        var set = Set<Int>()
+        for s in r.segments where !s.done && s.ranged && s.firstBlock >= 0 {
+            for b in s.firstBlock...s.lastBlock { set.insert(b) }
+        }
+        return set
+    }
+
+    private func buildSegments(_ r: DownloadRecord, excluding: Set<Int> = []) -> [Segment] {
         guard r.supportsRanges, r.totalBytes > 0, !r.blocks.isEmpty else {
+            if r.segments.contains(where: { !$0.done }) { return [] }
             return [Segment(start: 0, end: -1, firstBlock: r.blocks.isEmpty ? -1 : 0,
                             lastBlock: r.blocks.count - 1, ranged: false)]
         }
         var runs: [[Int]] = []
         var current: [Int] = []
         for i in r.blocks.indices {
-            if r.blocks[i].isComplete {
+            if r.blocks[i].isComplete || excluding.contains(i) {
                 if !current.isEmpty { runs.append(current) }
                 current = []
             } else {
@@ -303,6 +347,17 @@ final class DownloadManager: ObservableObject {
             }
         }
         if !current.isEmpty { runs.append(current) }
+        // Teile höchstens 32 MB groß: kleiner Verlust bei Wechseln, feines Fortsetzen.
+        func size(_ run: [Int]) -> Int64 {
+            guard let f = run.first, let l = run.last else { return 0 }
+            return r.blocks[l].end - (r.blocks[f].start + r.blocks[f].done)
+        }
+        while let idx = runs.indices.first(where: { size(runs[$0]) > Self.maxSegmentBytes && runs[$0].count > 1 }) {
+            let run = runs.remove(at: idx)
+            let mid = run.count / 2
+            runs.insert(Array(run[mid...]), at: idx)
+            runs.insert(Array(run[..<mid]), at: idx)
+        }
         while runs.count < backgroundParts,
               let idx = runs.indices.max(by: { runs[$0].count < runs[$1].count }), runs[idx].count > 1 {
             let run = runs.remove(at: idx)
@@ -322,9 +377,9 @@ final class DownloadManager: ObservableObject {
         r.engine = .background
         r.state = .downloading
         r.error = nil
-        if r.segments.allSatisfy(\.done) {
-            r.segments = buildSegments(r)
-        }
+        let open = r.segments.filter { !$0.done }
+        r.segments = open + buildSegments(r, excluding: coveredBlocks(r))
+        DiagLog.add("Hintergrund-Modus: \(r.fileName), \(r.segments.count) Teile (System wählt das Netzwerk)")
         if r.segments.contains(where: \.ranged) {
             let path = partURL(r).path
             if !FileManager.default.fileExists(atPath: path) {
@@ -390,8 +445,9 @@ final class DownloadManager: ObservableObject {
                 return
             }
         }
-        guard r.state == .downloading, r.engine == .background else { return }
-        if cancelled && !bg.hasResumeData(seg) && error == nil { return }
+        guard r.state == .downloading else { return }
+        if cancelled { return }
+        DiagLog.add("Hintergrund-Teil Fehler (\(r.fileName)): \(error ?? "?")")
         r.segments[i].attempts += 1
         if r.segments[i].attempts > 10 {
             r.state = .failed
@@ -558,6 +614,7 @@ final class DownloadManager: ObservableObject {
     func enterBackground() {
         guard !isBackground else { return }
         isBackground = true
+        DiagLog.add("App im Hintergrund – Turbo-Downloads gehen an iOS über")
         handoverTask = UIApplication.shared.beginBackgroundTask(withName: "plexo.handover") {
             Task { @MainActor in DownloadManager.shared.endHandover() }
         }
@@ -567,9 +624,8 @@ final class DownloadManager: ObservableObject {
             for (id, job) in turboJobs {
                 let result = await job.stop()
                 guard var r = self.record(id), r.state == .downloading else { continue }
-                r.blocks = result.blocks
+                r.blocks = Self.mergeBlocks(r.blocks, result.blocks)
                 r.bytesByNetwork = result.bytesByNetwork
-                r.segments = []
                 self.live[id] = nil
                 self.launchBackground(r)
             }
@@ -589,8 +645,35 @@ final class DownloadManager: ObservableObject {
     func enterForeground() {
         guard isBackground else { return }
         isBackground = false
+        DiagLog.add("App im Vordergrund")
         resumeBackgroundSegments()
+        for r in records where r.state == .downloading && r.engine == .background && r.turbo && canTurbo(r) {
+            returnToTurbo(r.id)
+        }
         schedule()
+    }
+
+    /// Hintergrund → Turbo ohne Datenverlust: Teile, die gerade laden, dürfen fertig werden;
+    /// alles andere übernimmt sofort wieder Turbo über alle Netzwerke.
+    private func returnToTurbo(_ id: UUID) {
+        Task {
+            let receiving = await self.bg.receivingSegments(download: id)
+            await self.bg.cancelIdleSegments(download: id, keep: receiving)
+            guard var r = self.record(id), r.state == .downloading, r.engine == .background,
+                  self.jobs[id] == nil, self.canTurbo(r) else { return }
+            for s in r.segments where !s.done && !s.fileReady && !receiving.contains(s.id) {
+                self.bg.dropResumeData(s.id)
+            }
+            r.segments = r.segments.filter { $0.done || $0.fileReady || receiving.contains($0.id) }
+            let reserved = self.coveredBlocks(r)
+            guard let url = URL(string: r.finalURL ?? r.url) else { return }
+            DiagLog.add("Zurück zu Turbo: \(r.fileName), \(receiving.count) Hintergrund-Teile laufen noch zu Ende")
+            do {
+                try self.launchTurbo(r, url: url, reserved: reserved)
+            } catch {
+                self.launchBackground(r)
+            }
+        }
     }
 
     /// Hintergrund-Download wieder auf Turbo (mehrere Netzwerke) umstellen.
@@ -624,15 +707,14 @@ final class DownloadManager: ObservableObject {
                 Task {
                     let result = await job.stop()
                     if var current = self.record(id) {
-                        current.blocks = result.blocks
+                        current.blocks = Self.mergeBlocks(current.blocks, result.blocks)
                         current.bytesByNetwork = result.bytesByNetwork
                         self.update(current)
                         self.save(force: true)
                     }
                 }
-            } else if r.engine == .background {
-                Task { await self.bg.cancel(download: id, keepResume: true) }
             }
+            Task { await self.bg.cancel(download: id, keepResume: true) }
         default:
             return
         }

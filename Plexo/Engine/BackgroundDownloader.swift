@@ -131,6 +131,25 @@ final class BackgroundDownloader: NSObject, URLSessionDownloadDelegate, @uncheck
         }
     }
 
+    /// Teile eines Downloads, die gerade wirklich Daten empfangen.
+    func receivingSegments(download: UUID) async -> Set<UUID> {
+        let tasks = await session.allTasks
+        return Set(tasks.compactMap { t -> UUID? in
+            guard t.taskDescription?.hasPrefix(download.uuidString) == true,
+                  t.state == .running, t.countOfBytesReceived > 0 else { return nil }
+            return Self.ids(t)?.segment
+        })
+    }
+
+    /// Bricht alle Teile eines Downloads ab, die noch keine Daten empfangen haben (kein Verlust).
+    func cancelIdleSegments(download: UUID, keep: Set<UUID>) async {
+        let tasks = await session.allTasks
+        for t in tasks where t.taskDescription?.hasPrefix(download.uuidString) == true {
+            if let ids = Self.ids(t), keep.contains(ids.segment) { continue }
+            t.cancel()
+        }
+    }
+
     /// Segmente, die gerade in der Session laufen (z. B. nach einem Neustart der App).
     func runningSegments() async -> Set<UUID> {
         let tasks = await session.allTasks

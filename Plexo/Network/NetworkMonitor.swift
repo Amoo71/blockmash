@@ -145,6 +145,9 @@ final class NetworkMonitor: ObservableObject {
                 }
                 InterfaceRegistry.set(kind, ok ? iface : nil)
                 Task { @MainActor in
+                    if self?.available[kind] != ok {
+                        DiagLog.add("\(kind.defaultName): \(ok ? "verfügbar" : "nicht verfügbar") (\(name ?? "-"))\(isDenied ? " – für diese App gesperrt!" : "")")
+                    }
                     self?.available[kind] = ok
                     self?.interfaceNames[kind] = name
                     if isDenied { self?.denied.insert(kind) } else { self?.denied.remove(kind) }
