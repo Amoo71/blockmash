@@ -11,7 +11,7 @@ struct SwitchMirrorApp: App {
 }
 
 @MainActor
-final class CaptureModel: NSObject, ObservableObject {
+final class CaptureModel: NSObject, ObservableObject, SCContentSharingPickerObserver {
     @Published var status = "Ready"
     @Published var frameCount = 0
 
@@ -56,8 +56,6 @@ final class CaptureModel: NSObject, ObservableObject {
             let configuration = SCStreamConfiguration()
             configuration.width = 1920
             configuration.height = 1080
-            configuration.minimumFrameInterval = CMTime(value: 1, timescale: 30)
-            configuration.queueDepth = 3
             let newStream = SCStream(filter: filter, configuration: configuration, delegate: nil)
             try newStream.addStreamOutput(self, type: .screen, sampleHandlerQueue: DispatchQueue(label: "SwitchMirror.capture"))
             try await newStream.startCapture()
@@ -68,7 +66,7 @@ final class CaptureModel: NSObject, ObservableObject {
         }
     }
 
-    nonisolated func contentSharingPicker(
+    @objc nonisolated func contentSharingPicker(
         _ picker: SCContentSharingPicker,
         didUpdateWith filter: SCContentFilter,
         for stream: SCStream?
@@ -78,11 +76,11 @@ final class CaptureModel: NSObject, ObservableObject {
         }
     }
 
-    nonisolated func contentSharingPicker(_ picker: SCContentSharingPicker, didCancelFor stream: SCStream?) {
+    @objc nonisolated func contentSharingPicker(_ picker: SCContentSharingPicker, didCancelFor stream: SCStream?) {
         Task { @MainActor in self.status = "Screen selection cancelled" }
     }
 
-    nonisolated func contentSharingPickerStartDidFailWithError(_ error: Error) {
+    @objc nonisolated func contentSharingPickerStartDidFailWithError(_ error: NSError) {
         Task { @MainActor in self.status = "Picker failed: \(error.localizedDescription)" }
     }
 }
