@@ -40,8 +40,12 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            build 2>&1 | tee build.log | grep -E "error:|warning: unre|BUILD (SUCCEEDED|FAILED)|\*\*" || true
-          test -d build/Build/Products/Release-iphoneos/Plexo.app || { grep -E "error" build.log | head -50; exit 1; }
+            build 2>&1 | tee build.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
+          if ! grep -q "BUILD SUCCEEDED" build.log || [ ! -f build/Build/Products/Release-iphoneos/Plexo.app/Plexo ]; then
+            echo "::error::Build fehlgeschlagen"
+            grep -E "error:" build.log | sort -u | head -80
+            exit 1
+          fi
 
       - name: IPA packen
         run: |

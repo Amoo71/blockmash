@@ -277,8 +277,9 @@ actor DownloadJob {
     private func spawn(_ kind: NetworkKind) {
         let sid = nextId
         nextId += 1
-        let task = Task { [weak self] in
-            await self?.runStream(id: sid, kind: kind)
+        let task = Task { [weak self] () -> Void in
+            guard let self else { return }
+            await self.runStream(id: sid, kind: kind)
         }
         streams[sid] = StreamInfo(kind: kind, task: task)
     }

@@ -8,14 +8,14 @@ import UserNotifications
 final class DownloadManager: ObservableObject {
     static let shared = DownloadManager()
 
-    static let maxConcurrentKey = "maxConcurrentDownloads"
-    static let defaultStreamsKey = "defaultStreams"
-    static let globalLimitKey = "globalSpeedLimit"
-    static let slowModeKey = "slowMode"
-    static let slowModeLimitKey = "slowModeLimit"
-    static let keepAwakeKey = "keepAwake"
-    static let notifyKey = "notifyOnFinish"
-    static let folderKey = "downloadFolder"
+    nonisolated static let maxConcurrentKey = "maxConcurrentDownloads"
+    nonisolated static let defaultStreamsKey = "defaultStreams"
+    nonisolated static let globalLimitKey = "globalSpeedLimit"
+    nonisolated static let slowModeKey = "slowMode"
+    nonisolated static let slowModeLimitKey = "slowModeLimit"
+    nonisolated static let keepAwakeKey = "keepAwake"
+    nonisolated static let notifyKey = "notifyOnFinish"
+    nonisolated static let folderKey = "downloadFolder"
 
     @Published private(set) var records: [DownloadRecord] = []
     @Published private(set) var live: [UUID: DownloadLive] = [:]
