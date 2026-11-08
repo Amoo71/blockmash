@@ -1,4 +1,5 @@
 import Foundation
+import Network
 
 // Ein laufender Download – entspricht httpTransfer.ts, scheduler.ts und concurrency.ts in Plexo.
 //
@@ -82,6 +83,29 @@ actor DownloadJob {
     nonisolated let id: UUID
     nonisolated let fd: Int32
     private let url: URL
+    /// Der ursprüngliche Link (vor Weiterleitungen) – für Netzwerke, die eine eigene,
+    /// für ihre IP-Adresse signierte Weiterleitung brauchen.
+    private let originalURL: URL
+
+    /// Ausweich-Strategien pro Netzwerk, wenn der Server nur über dieses Netzwerk 4xx liefert.
+    private struct Strategy {
+        let useOriginal: Bool
+        let ip: NWProtocolIP.Options.Version
+        let label: String
+    }
+
+    private static let strategies: [Strategy] = [
+        Strategy(useOriginal: false, ip: .any, label: "Standard"),
+        Strategy(useOriginal: true, ip: .any, label: "eigene Weiterleitung über dieses Netzwerk"),
+        Strategy(useOriginal: true, ip: .v4, label: "eigene Weiterleitung + IPv4"),
+        Strategy(useOriginal: false, ip: .v4, label: "IPv4"),
+        Strategy(useOriginal: true, ip: .v6, label: "eigene Weiterleitung + IPv6"),
+        Strategy(useOriginal: false, ip: .v6, label: "IPv6")
+    ]
+
+    private var strategyStep: [NetworkKind: Int] = [:]
+    private var resolved: [NetworkKind: URL] = [:]
+    private var served: Set<NetworkKind> = []
     private let headers: [String: String]
     private let splittable: Bool
     private let fixedStreams: Int
@@ -117,6 +141,7 @@ actor DownloadJob {
 
     init(record: DownloadRecord, url: URL, fd: Int32, enabled: Set<NetworkKind>, usable: Set<NetworkKind>,
          reserved: Set<Int> = [], handler: @escaping Handler) {
+        self.originalURL = URL(string: record.url) ?? url
         self.reserved = reserved
         self.id = record.id
         self.fd = fd
@@ -378,6 +403,11 @@ actor DownloadJob {
         bytesByNetwork[kind.rawValue, default: 0] += bytes
         failures[kind] = 0
         networkErrors[kind] = nil
+        if !served.contains(kind) {
+            served.insert(kind)
+            let step = strategyStep[kind] ?? 0
+            DiagLog.add("\(kind.defaultName) lädt Daten (Strategie: \(Self.strategies[step].label))")
+        }
         var b = blocks[a.block]
         b.byNetwork[kind.rawValue, default: 0] += bytes
         let front = a.offset - b.start + a.received
@@ -412,7 +442,28 @@ actor DownloadJob {
         attempts.removeValue(forKey: id)
     }
 
-    private func attemptFailed(_ id: Int, kind: NetworkKind, stream sid: Int, error: Error) -> Decision {
+    private struct Plan: Sendable {
+        let url: URL
+        let ip: NWProtocolIP.Options.Version
+        let step: Int
+    }
+
+    private func plan(for kind: NetworkKind) -> Plan {
+        let step = strategyStep[kind] ?? 0
+        let s = Self.strategies[step]
+        return Plan(url: resolved[kind] ?? (s.useOriginal ? originalURL : url), ip: s.ip, step: step)
+    }
+
+    private func noteRedirect(_ kind: NetworkKind, step: Int, to next: URL) {
+        if (strategyStep[kind] ?? 0) == step { resolved[kind] = next }
+    }
+
+    private func attemptFailed(_ id: Int, kind: NetworkKind, stream sid: Int, error: Error, step: Int) -> Decision {
+        if step < (strategyStep[kind] ?? 0) {
+            // Fehler mit einer bereits verworfenen Strategie: einfach mit der neuen weiter.
+            attempts.removeValue(forKey: id)
+            return .retry
+        }
         attempts.removeValue(forKey: id)
         if stopped { return .retire }
         lastError = error.localizedDescription
@@ -437,7 +488,26 @@ actor DownloadJob {
                 fail("Der Server unterstützt keine Teil-Downloads mehr. Bitte erneut starten.")
                 return .retire
             }
-            if case .status(let code) = h, [401, 404, 410].contains(code) {
+            if case .status(let code) = h, [401, 403, 404, 410].contains(code) {
+                // Nur dieses Netzwerk bekommt 4xx, andere laden: Link an IP gebunden oder IPv6-Problem.
+                if !served.subtracting([kind]).isEmpty && !served.contains(kind) {
+                    let next = step + 1
+                    if next < Self.strategies.count {
+                        strategyStep[kind] = next
+                        resolved[kind] = nil
+                        failures[kind] = 0
+                        networkErrors[kind] = "HTTP \(code) – versuche: \(Self.strategies[next].label)"
+                        DiagLog.add("\(kind.defaultName): HTTP \(code), andere Netzwerke laden → versuche „\(Self.strategies[next].label)“")
+                        return .retry
+                    }
+                    failedNetworks.insert(kind)
+                    failedAt[kind] = .distantFuture
+                    stopping.insert(sid)
+                    let others = served.subtracting([kind]).map(\.defaultName).joined(separator: "/")
+                    networkErrors[kind] = "Server liefert über \(kind.defaultName) nur HTTP \(code). Der Download-Link ist an die IP-Adresse von \(others) gebunden – dieser Server lässt sich nicht kombinieren."
+                    DiagLog.add("\(kind.defaultName): alle Strategien HTTP \(code) – Netzwerk für diesen Download aufgegeben")
+                    return .retire
+                }
                 failures[kind, default: 0] += 4
             }
         }
@@ -508,6 +578,8 @@ actor DownloadJob {
     nonisolated private func runStream(id sid: Int, kind: NetworkKind) async {
         var connection: HTTPConnection?
         var currentURL = url
+        var currentIP: NWProtocolIP.Options.Version = .any
+        var currentStep = 0
         var backoff: Double = 1
         defer { connection?.cancel() }
 
@@ -524,13 +596,18 @@ actor DownloadJob {
                 work = w
             }
 
+            let plan = await plan(for: kind)
+            currentURL = plan.url
+            currentIP = plan.ip
+            currentStep = plan.step
+
             do {
                 let conn: HTTPConnection
-                if let c = connection, c.isReusable, c.matches(currentURL) {
+                if let c = connection, c.isReusable, c.matches(currentURL, ipVersion: currentIP) {
                     conn = c
                 } else {
                     connection?.cancel()
-                    conn = try HTTPConnection(url: currentURL, kind: kind)
+                    conn = try HTTPConnection(url: currentURL, kind: kind, ipVersion: currentIP)
                     connection = conn
                     try await conn.start()
                 }
@@ -560,7 +637,7 @@ actor DownloadJob {
             } catch HTTPError.redirect(let next) {
                 connection?.cancel()
                 connection = nil
-                currentURL = next
+                await noteRedirect(kind, step: currentStep, to: next)
                 await release(work.attempt)
             } catch {
                 connection?.cancel()
@@ -569,7 +646,10 @@ actor DownloadJob {
                     await release(work.attempt)
                     break loop
                 }
-                let decision = await attemptFailed(work.attempt, kind: kind, stream: sid, error: error)
+                if let h = error as? HTTPError, case .status(let code) = h {
+                    DiagLog.add("\(kind.defaultName): HTTP \(code) von \(currentURL.host ?? "?")")
+                }
+                let decision = await attemptFailed(work.attempt, kind: kind, stream: sid, error: error, step: currentStep)
                 if case .retire = decision { break loop }
                 try? await Task.sleep(nanoseconds: UInt64(backoff * 1_000_000_000))
                 backoff = min(backoff * 2, 30)

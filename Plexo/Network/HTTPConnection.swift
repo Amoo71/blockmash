@@ -64,6 +64,7 @@ final class HTTPConnection: @unchecked Sendable {
     let port: Int
     let secure: Bool
     let kind: NetworkKind
+    let ipVersion: NWProtocolIP.Options.Version
 
     private let connection: NWConnection
     private let queue = DispatchQueue(label: "plexo.http")
@@ -72,7 +73,8 @@ final class HTTPConnection: @unchecked Sendable {
     private var started = false
     private var waitingReason: String?
 
-    init(url: URL, kind: NetworkKind) throws {
+    init(url: URL, kind: NetworkKind, ipVersion: NWProtocolIP.Options.Version = .any) throws {
+        self.ipVersion = ipVersion
         guard let host = url.host, !host.isEmpty, let scheme = url.scheme?.lowercased(),
               scheme == "http" || scheme == "https" else { throw HTTPError.invalidURL }
         self.host = host
@@ -100,7 +102,14 @@ final class HTTPConnection: @unchecked Sendable {
         }
         params.prohibitExpensivePaths = false
         params.prohibitConstrainedPaths = false
+        if ipVersion != .any, let ip = params.defaultProtocolStack.internetProtocol as? NWProtocolIP.Options {
+            ip.version = ipVersion
+        }
         connection = NWConnection(host: NWEndpoint.Host(host), port: nwPort, using: params)
+    }
+
+    func matches(_ url: URL, ipVersion version: NWProtocolIP.Options.Version) -> Bool {
+        version == ipVersion && matches(url)
     }
 
     func matches(_ url: URL) -> Bool {
@@ -129,7 +138,8 @@ final class HTTPConnection: @unchecked Sendable {
                         once.run {
                             let path = self?.connection.currentPath
                             let iface = path?.availableInterfaces.first?.name ?? "?"
-                            DiagLog.add("Verbindung \(kindName) bereit über \(iface) → \(hostName)")
+                            let remote = path?.remoteEndpoint.map { "\($0)" } ?? hostName
+                            DiagLog.add("Verbindung \(kindName) bereit über \(iface) → \(hostName) (\(remote))")
                             cont.resume()
                         }
                     case .failed(let error):
