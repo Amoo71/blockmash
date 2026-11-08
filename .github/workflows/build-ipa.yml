@@ -1,0 +1,78 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [ main, master, 'claude/**' ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode-Version anzeigen
+        run: xcodebuild -version
+
+      - name: XcodeGen installieren
+        run: brew install xcodegen
+
+      - name: Xcode-Projekt erzeugen
+        run: xcodegen generate
+
+      - name: App bauen (unsigniert)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Pledo.xcodeproj \
+            -scheme Pledo \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build.log | grep -E "error:|warning: unre|BUILD (SUCCEEDED|FAILED)|\*\*" || true
+          test -d build/Build/Products/Release-iphoneos/Pledo.app || { grep -E "error" build.log | head -50; exit 1; }
+
+      - name: IPA packen
+        run: |
+          rm -rf Payload Pledo.ipa
+          mkdir Payload
+          cp -R build/Build/Products/Release-iphoneos/Pledo.app Payload/
+          zip -qry Pledo.ipa Payload
+          ls -lh Pledo.ipa
+
+      - name: Build-Log hochladen
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: ignore
+
+      - name: IPA als Artifact hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: Pledo-ipa
+          path: Pledo.ipa
+
+      - name: Release "latest" aktualisieren
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          sleep 3
+          gh release create latest Pledo.ipa \
+            --target "${GITHUB_SHA}" \
+            --title "Pledo iOS – neuester Build" \
+            --notes "Automatisch gebaut aus ${GITHUB_SHA::7} (Branch ${GITHUB_REF_NAME}). Unsignierte IPA für LiveContainer / SideStore / AltStore." \
+            --prerelease
