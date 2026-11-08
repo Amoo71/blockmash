@@ -6,6 +6,10 @@ export class RoomRelay {
     if (request.headers.get("Upgrade") !== "websocket") return new Response("WebSocket required", { status: 426 });
     const role = url.searchParams.get("role");
     if (role !== "sender" && role !== "receiver") return new Response("Invalid role", { status: 400 });
+    const activePeers = this.state.getWebSockets();
+    if (activePeers.some(peer => peer.deserializeAttachment()?.role === role)) {
+      return new Response("A peer with this role is already connected to the room", { status: 409 });
+    }
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     server.accept();
