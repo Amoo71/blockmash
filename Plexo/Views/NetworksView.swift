@@ -6,6 +6,28 @@ import SwiftUI
 struct NetworksView: View {
     @EnvironmentObject private var networks: NetworkMonitor
     @EnvironmentObject private var downloads: DownloadManager
+    @State private var results: [NetworkKind: String] = [:]
+    @State private var testing = false
+
+    private func runTests() {
+        testing = true
+        results = [:]
+        let kinds = networks.visibleKinds.filter { networks.isAvailable($0) || $0 == .cellular }
+        Task {
+            await withTaskGroup(of: (NetworkKind, String).self) { group in
+                for kind in kinds {
+                    group.addTask {
+                        let text = await NetworkTester.run(kind)
+                        return (kind, text)
+                    }
+                }
+                for await (kind, text) in group {
+                    results[kind] = text
+                }
+            }
+            testing = false
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -18,6 +40,25 @@ struct NetworksView: View {
                     Text("Geschwindigkeit (60 s)")
                 } footer: {
                     Text("Gesamt: \(Format.speed(downloads.totalSpeed))")
+                }
+
+                Section {
+                    Button {
+                        runTests()
+                    } label: {
+                        Label(testing ? "Teste…" : "Alle Netzwerke testen", systemImage: "speedometer")
+                    }
+                    .disabled(testing)
+                    ForEach(NetworkKind.allCases.filter { results[$0] != nil }) { kind in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(networks.name(kind)).font(.caption.bold())
+                            Text(results[kind] ?? "").font(.caption)
+                        }
+                    }
+                } header: {
+                    Text("Verbindungstest")
+                } footer: {
+                    Text("Lädt kurz über jedes Netzwerk einzeln. So siehst du, ob Mobilfunk neben WLAN wirklich nutzbar ist.")
                 }
 
                 Section {
@@ -59,7 +100,7 @@ struct NetworkCard: View {
                         Text(iface).font(.caption2).foregroundStyle(.secondary)
                     }
                 }
-                Text(statusLine(status, s)).font(.caption).foregroundStyle(status == .limit ? Color.red : Color.secondary)
+                Text(statusLine(status, s)).font(.caption).foregroundStyle(status == .limit || status == .denied ? Color.red : Color.secondary)
                 if s.dataCap > 0 {
                     ProgressView(value: min(1, Double(s.usedBytes) / Double(s.dataCap)))
                         .tint(networks.color(kind))

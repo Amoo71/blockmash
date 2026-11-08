@@ -23,6 +23,7 @@ struct PlexoApp: App {
     @StateObject private var downloads = DownloadManager.shared
     @StateObject private var networks = NetworkMonitor.shared
     @StateObject private var files = FilesStore.shared
+    @StateObject private var torrents = TorrentManager.shared
 
     var body: some Scene {
         WindowGroup {
@@ -30,12 +31,18 @@ struct PlexoApp: App {
                 .environmentObject(downloads)
                 .environmentObject(networks)
                 .environmentObject(files)
-                .task { downloads.resumeOnLaunch() }
+                .environmentObject(torrents)
+                .task {
+                    downloads.resumeOnLaunch()
+                    torrents.start()
+                }
                 .onOpenURL { url in AddRequest.shared.handle(url) }
         }
         .onChange(of: scenePhase) { phase in
             switch phase {
-            case .background: downloads.enterBackground()
+            case .background:
+                downloads.enterBackground()
+                torrents.enterBackground()
             case .active: downloads.enterForeground()
             default: break
             }
@@ -57,6 +64,15 @@ final class AddRequest: ObservableObject {
     }
 
     func handle(_ url: URL) {
+        let scheme = url.scheme?.lowercased() ?? ""
+        if scheme == "magnet" {
+            pending = PendingAdd(links: [url.absoluteString], headers: [:], fileName: nil)
+            return
+        }
+        if url.isFileURL {
+            if url.pathExtension.lowercased() == "torrent" { TorrentManager.shared.addTorrentFile(url) }
+            return
+        }
         if url.scheme?.lowercased() == "plexo",
            let comps = URLComponents(url: url, resolvingAgainstBaseURL: false),
            let link = comps.queryItems?.first(where: { $0.name == "url" })?.value {
@@ -74,6 +90,7 @@ final class AddRequest: ObservableObject {
 struct RootView: View {
     @EnvironmentObject private var downloads: DownloadManager
     @EnvironmentObject private var networks: NetworkMonitor
+    @EnvironmentObject private var torrents: TorrentManager
     @StateObject private var addRequest = AddRequest.shared
     @State private var tab = 0
 
@@ -81,7 +98,7 @@ struct RootView: View {
         TabView(selection: $tab) {
             DownloadsView()
                 .tabItem { Label("Downloads", systemImage: "arrow.down.circle") }
-                .badge(downloads.activeCount)
+                .badge(downloads.activeCount + torrents.activeCount)
                 .tag(0)
             BrowserView()
                 .tabItem { Label("Browser", systemImage: "safari") }
@@ -101,6 +118,13 @@ struct RootView: View {
             }
             .environmentObject(downloads)
             .environmentObject(networks)
+            .environmentObject(torrents)
+        }
+        .alert("Torrent", isPresented: Binding(get: { torrents.lastError != nil },
+                                               set: { if !$0 { torrents.lastError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(torrents.lastError ?? "")
         }
     }
 }

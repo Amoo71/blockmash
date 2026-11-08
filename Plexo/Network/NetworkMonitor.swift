@@ -46,6 +46,24 @@ enum NetworkKind: String, Codable, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// Aktuelle NWInterface-Objekte je Netzwerk (threadsicher, für HTTPConnection).
+enum InterfaceRegistry {
+    private static let lock = NSLock()
+    private static var interfaces: [NetworkKind: NWInterface] = [:]
+
+    static func set(_ kind: NetworkKind, _ iface: NWInterface?) {
+        lock.lock()
+        interfaces[kind] = iface
+        lock.unlock()
+    }
+
+    static func interface(for kind: NetworkKind) -> NWInterface? {
+        lock.lock()
+        defer { lock.unlock() }
+        return interfaces[kind]
+    }
+}
+
 enum LimitPeriod: String, Codable, CaseIterable, Identifiable {
     case day, week, month
 
@@ -73,7 +91,7 @@ struct NetworkSettings: Codable, Equatable {
 }
 
 enum NetworkStatus {
-    case on, off, offline, limit
+    case on, off, offline, limit, denied
 
     var label: String {
         switch self {
@@ -81,6 +99,7 @@ enum NetworkStatus {
         case .off: return "Ausgeschaltet"
         case .offline: return "Nicht verfügbar"
         case .limit: return "Datenlimit erreicht"
+        case .denied: return "Mobilfunk für diese App gesperrt"
         }
     }
 }
@@ -93,6 +112,7 @@ final class NetworkMonitor: ObservableObject {
 
     @Published private(set) var available: [NetworkKind: Bool] = [:]
     @Published private(set) var interfaceNames: [NetworkKind: String] = [:]
+    @Published private(set) var denied: Set<NetworkKind> = []
     @Published private(set) var settings: [NetworkKind: NetworkSettings] = [:]
     @Published private(set) var speeds: [NetworkKind: Double] = [:]
     @Published private(set) var history: [NetworkKind: [Double]] = [:]
@@ -117,10 +137,17 @@ final class NetworkMonitor: ObservableObject {
             let monitor = NWPathMonitor(requiredInterfaceType: kind.interfaceType)
             monitor.pathUpdateHandler = { [weak self] path in
                 let ok = path.status == .satisfied
-                let name = path.availableInterfaces.first { $0.type == kind.interfaceType }?.name
+                let iface = path.availableInterfaces.first { $0.type == kind.interfaceType }
+                let name = iface?.name
+                var isDenied = false
+                if #available(iOS 14.2, *) {
+                    isDenied = path.status != .satisfied && path.unsatisfiedReason == .cellularDenied
+                }
+                InterfaceRegistry.set(kind, ok ? iface : nil)
                 Task { @MainActor in
                     self?.available[kind] = ok
                     self?.interfaceNames[kind] = name
+                    if isDenied { self?.denied.insert(kind) } else { self?.denied.remove(kind) }
                 }
             }
             monitor.start(queue: queue)
@@ -170,6 +197,7 @@ final class NetworkMonitor: ObservableObject {
     }
 
     func status(_ kind: NetworkKind) -> NetworkStatus {
+        if denied.contains(kind) { return .denied }
         if !isAvailable(kind) { return .offline }
         if !(settings[kind]?.enabled ?? true) { return .off }
         if isOverCap(kind) { return .limit }

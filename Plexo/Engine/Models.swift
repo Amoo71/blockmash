@@ -116,6 +116,7 @@ struct NetworkLive: Sendable {
     var streams: Int = 0
     var bytes: Int64 = 0
     var failing = false
+    var error: String?
 }
 
 struct DownloadLive: Sendable {

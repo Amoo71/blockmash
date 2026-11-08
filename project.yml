@@ -68,6 +68,42 @@ targets:
         OTHER_CFLAGS: "$(inherited) -Wno-everything"
         SKIP_INSTALL: YES
         CODE_SIGNING_ALLOWED: NO
+  Torrent:
+    type: library.static
+    platform: iOS
+    sources:
+      - path: Vendor/libtorrent/src
+        excludes:
+          - "**/LICENSE"
+      - path: Vendor/libtorrent/deps/try_signal
+        excludes:
+          - "LICENSE"
+      - path: Vendor/TorrentBridge
+    settings:
+      base:
+        PRODUCT_NAME: Torrent
+        CLANG_CXX_LANGUAGE_STANDARD: gnu++17
+        CLANG_CXX_LIBRARY: libc++
+        GCC_ENABLE_CPP_EXCEPTIONS: YES
+        GCC_ENABLE_CPP_RTTI: YES
+        GCC_WARN_INHIBIT_ALL_WARNINGS: YES
+        RUN_CLANG_STATIC_ANALYZER: NO
+        GCC_OPTIMIZATION_LEVEL: "2"
+        HEADER_SEARCH_PATHS:
+          - "$(SRCROOT)/Vendor/libtorrent/include"
+          - "$(SRCROOT)/Vendor/libtorrent/deps/try_signal"
+          - "$(SRCROOT)/build-deps/boost"
+        GCC_PREPROCESSOR_DEFINITIONS:
+          - "$(inherited)"
+          - BOOST_ASIO_ENABLE_CANCELIO
+          - BOOST_ASIO_NO_DEPRECATED
+          - TORRENT_BUILDING_LIBRARY
+          - BOOST_EXCEPTION_DISABLE
+          - BOOST_ASIO_HAS_STD_CHRONO
+          - _FILE_OFFSET_BITS=64
+        OTHER_CPLUSPLUSFLAGS: "$(inherited) -Wno-everything"
+        SKIP_INSTALL: YES
+        CODE_SIGNING_ALLOWED: NO
   Plexo:
     type: application
     platform: iOS
@@ -75,6 +111,7 @@ targets:
       - path: Plexo
     dependencies:
       - target: UnRAR
+      - target: Torrent
       - package: ZIPFoundation
     info:
       path: Plexo/Info.plist
@@ -87,6 +124,23 @@ targets:
           - CFBundleURLName: io.github.plexo.ios
             CFBundleURLSchemes:
               - plexo
+              - magnet
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: BitTorrent
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - org.bittorrent.torrent
+        UTImportedTypeDeclarations:
+          - UTTypeIdentifier: org.bittorrent.torrent
+            UTTypeDescription: BitTorrent-Datei
+            UTTypeConformsTo:
+              - public.data
+            UTTypeTagSpecification:
+              public.filename-extension:
+                - torrent
+              public.mime-type:
+                - application/x-bittorrent
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
         UISupportsDocumentBrowser: false
@@ -116,5 +170,7 @@ targets:
         CODE_SIGN_IDENTITY: ""
         ENABLE_BITCODE: NO
         SWIFT_OBJC_BRIDGING_HEADER: Plexo/Plexo-Bridging-Header.h
-        HEADER_SEARCH_PATHS: "$(SRCROOT)/Vendor/RarBridge"
+        HEADER_SEARCH_PATHS:
+          - "$(SRCROOT)/Vendor/RarBridge"
+          - "$(SRCROOT)/Vendor/TorrentBridge"
         OTHER_LDFLAGS: "$(inherited) -lc++"

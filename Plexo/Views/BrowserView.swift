@@ -95,6 +95,15 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
     func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse,
                  decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
         let response = navigationResponse.response
+        if let url = response.url,
+           response.mimeType == "application/x-bittorrent" || url.pathExtension.lowercased() == "torrent" {
+            decisionHandler(.cancel)
+            Task {
+                let headers = await sessionHeaders(for: url)
+                TorrentManager.shared.addTorrentURL(url, headers: headers)
+            }
+            return
+        }
         let disposition = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Disposition")?.lowercased() ?? ""
         let isAttachment = disposition.contains("attachment")
         if let url = response.url, navigationResponse.isForMainFrame || isAttachment,
@@ -108,6 +117,11 @@ final class BrowserModel: NSObject, ObservableObject, WKNavigationDelegate, WKUI
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        if let url = navigationAction.request.url, url.scheme?.lowercased() == "magnet" {
+            decisionHandler(.cancel)
+            AddRequest.shared.offer(link: url.absoluteString, headers: [:], fileName: nil)
+            return
+        }
         if navigationAction.shouldPerformDownload, let url = navigationAction.request.url {
             decisionHandler(.cancel)
             offer(url, suggestedName: nil)

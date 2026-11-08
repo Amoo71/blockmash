@@ -70,6 +70,7 @@ final class HTTPConnection: @unchecked Sendable {
     private var buffer = Data()
     private(set) var isReusable = false
     private var started = false
+    private var waitingReason: String?
 
     init(url: URL, kind: NetworkKind) throws {
         guard let host = url.host, !host.isEmpty, let scheme = url.scheme?.lowercased(),
@@ -92,7 +93,11 @@ final class HTTPConnection: @unchecked Sendable {
         } else {
             params = NWParameters(tls: nil, tcp: tcp)
         }
-        params.requiredInterfaceType = kind.interfaceType
+        if let iface = InterfaceRegistry.interface(for: kind) {
+            params.requiredInterface = iface
+        } else {
+            params.requiredInterfaceType = kind.interfaceType
+        }
         params.prohibitExpensivePaths = false
         params.prohibitConstrainedPaths = false
         connection = NWConnection(host: NWEndpoint.Host(host), port: nwPort, using: params)
@@ -123,10 +128,8 @@ final class HTTPConnection: @unchecked Sendable {
                     case .failed(let error):
                         once.run { cont.resume(throwing: HTTPError.connectionFailed(error.localizedDescription)) }
                     case .waiting(let error):
-                        once.run {
-                            self?.connection.cancel()
-                            cont.resume(throwing: HTTPError.connectionFailed(error.localizedDescription))
-                        }
+                        // Mobilfunk-Modem wacht noch auf o. Ä. – weiter warten, bis "ready" oder Timeout.
+                        self?.waitingReason = error.localizedDescription
                     case .cancelled:
                         once.run { cont.resume(throwing: CancellationError()) }
                     default:
@@ -136,8 +139,13 @@ final class HTTPConnection: @unchecked Sendable {
                 connection.start(queue: queue)
                 queue.asyncAfter(deadline: .now() + timeout) { [weak self] in
                     once.run {
+                        let reason = self?.waitingReason
                         self?.connection.cancel()
-                        cont.resume(throwing: HTTPError.timeout)
+                        if let reason {
+                            cont.resume(throwing: HTTPError.connectionFailed(reason))
+                        } else {
+                            cont.resume(throwing: HTTPError.timeout)
+                        }
                     }
                 }
             }

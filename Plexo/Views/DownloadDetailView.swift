@@ -234,7 +234,9 @@ struct NetworkLiveRow: View {
             } else if networks.isOverCap(kind) {
                 parts.append("Datenlimit erreicht")
             } else if live?.failing == true {
-                parts.append("Fehler")
+                parts.append("Fehler, neuer Versuch gleich: \(live?.error ?? "")")
+            } else if (live?.streams ?? 0) == 0, let err = live?.error {
+                parts.append(err)
             } else {
                 parts.append(Format.speed(live?.speed ?? 0))
                 parts.append("\(live?.streams ?? 0) Streams")

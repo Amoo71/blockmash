@@ -101,7 +101,10 @@ actor DownloadJob {
     private var ceilings: [NetworkKind: (limit: Int, since: Date)] = [:]
     private var failures: [NetworkKind: Int] = [:]
     private var failedNetworks: Set<NetworkKind> = []
+    private var failedAt: [NetworkKind: Date] = [:]
+    private var networkErrors: [NetworkKind: String] = [:]
     private var hedges: [Int: Int] = [:]
+    private var totalFailures = 0
     private var tickBytes: [NetworkKind: Int64] = [:]
     private var speeds: [NetworkKind: Double] = [:]
     private var lastTick = Date()
@@ -194,7 +197,8 @@ actor DownloadJob {
         for kind in NetworkKind.allCases {
             nets[kind] = NetworkLive(speed: speeds[kind] ?? 0, streams: streamCount(kind),
                                      bytes: bytesByNetwork[kind.rawValue] ?? 0,
-                                     failing: failedNetworks.contains(kind))
+                                     failing: failedNetworks.contains(kind),
+                                     error: networkErrors[kind])
         }
         var live = DownloadLive()
         live.networks = nets
@@ -241,6 +245,12 @@ actor DownloadJob {
     private func reconcile() {
         guard !stopped else { return }
         let now = Date()
+        // Gescheiterte Netzwerke nach 30 s erneut versuchen.
+        for (kind, t) in failedAt where now.timeIntervalSince(t) >= 30 {
+            failedNetworks.remove(kind)
+            failedAt[kind] = nil
+            failures[kind] = 0
+        }
         for (kind, c) in ceilings where now.timeIntervalSince(c.since) >= 60 {
             if c.limit + 1 >= DownloadPlan.maxStreams {
                 ceilings[kind] = nil
@@ -361,6 +371,7 @@ actor DownloadJob {
         tickBytes[kind, default: 0] += bytes
         bytesByNetwork[kind.rawValue, default: 0] += bytes
         failures[kind] = 0
+        networkErrors[kind] = nil
         var b = blocks[a.block]
         b.byNetwork[kind.rawValue, default: 0] += bytes
         let front = a.offset - b.start + a.received
@@ -399,6 +410,7 @@ actor DownloadJob {
         attempts.removeValue(forKey: id)
         if stopped { return .retire }
         lastError = error.localizedDescription
+        networkErrors[kind] = error.localizedDescription
 
         if let posix = error as? POSIXError, posix.code == .ENOSPC {
             fail("Kein Speicherplatz mehr frei")
@@ -425,11 +437,13 @@ actor DownloadJob {
         failures[kind, default: 0] += 1
         if (failures[kind] ?? 0) >= 12 {
             failedNetworks.insert(kind)
+            failedAt[kind] = Date()
             stopping.insert(sid)
             let left = enabled.intersection(usable).subtracting(failedNetworks)
-            if left.isEmpty && attempts.isEmpty {
+            if left.isEmpty && attempts.isEmpty && totalFailures >= 3 {
                 fail(error.localizedDescription + " – Link evtl. abgelaufen? „Link ersetzen“ behält den Fortschritt.")
             }
+            if left.isEmpty { totalFailures += 1 }
             return .retire
         }
         return .retry

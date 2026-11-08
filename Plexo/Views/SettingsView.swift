@@ -14,6 +14,8 @@ struct SettingsView: View {
     @AppStorage(DownloadManager.turboDefaultKey) private var turboDefault = true
     @AppStorage(DownloadManager.notifyKey) private var notify = true
     @AppStorage(DownloadManager.folderKey) private var folder = "Downloads"
+    @AppStorage(TorrentManager.seedKey) private var seed = false
+    @AppStorage(TorrentManager.uploadLimitKey) private var uploadLimit = 200 * 1024
 
     private static let speedOptions: [Int] = [0, 256 * 1024, 512 * 1024, 1 << 20, 2 << 20, 5 << 20, 10 << 20, 20 << 20, 50 << 20, 100 << 20]
 
@@ -66,6 +68,19 @@ struct SettingsView: View {
                     Text("Allgemein")
                 } footer: {
                     Text("Downloads laufen im Hintergrund weiter. Nur wenn du Plexo im App-Umschalter wegwischst, stoppt iOS sie – beim nächsten Öffnen geht es an derselben Stelle weiter.")
+                }
+
+                Section {
+                    Toggle("Nach Abschluss weiter seeden", isOn: $seed)
+                    Picker("Upload-Limit", selection: $uploadLimit) {
+                        ForEach(Self.speedOptions, id: \.self) { v in
+                            Text(v == 0 ? "Unbegrenzt" : Format.speed(Double(v))).tag(v)
+                        }
+                    }
+                } header: {
+                    Text("Torrents")
+                } footer: {
+                    Text("Torrents laufen, solange Plexo geöffnet ist (iOS erlaubt Torrent-Verbindungen nicht im Hintergrund). Fortschritt bleibt erhalten und geht beim nächsten Öffnen weiter.")
                 }
 
                 Section("Info") {

@@ -4,6 +4,7 @@ import UIKit
 struct DownloadsView: View {
     @EnvironmentObject private var downloads: DownloadManager
     @EnvironmentObject private var networks: NetworkMonitor
+    @EnvironmentObject private var torrents: TorrentManager
     @State private var showAdd = false
     @State private var showSettings = false
     @State private var removeTarget: DownloadRecord?
@@ -14,19 +15,50 @@ struct DownloadsView: View {
                 Section {
                     SpeedHeader()
                 }
-                if downloads.records.isEmpty {
+                if !torrents.items.isEmpty {
+                    Section("Torrents") {
+                        ForEach(torrents.items) { t in
+                            NavigationLink(value: TorrentRef(id: t.id)) {
+                                TorrentRow(item: t)
+                            }
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    torrents.remove(t.id, deleteFiles: false)
+                                } label: {
+                                    Label("Entfernen", systemImage: "trash")
+                                }
+                                if t.paused {
+                                    Button {
+                                        torrents.resume(t.id)
+                                    } label: {
+                                        Label("Fortsetzen", systemImage: "play.fill")
+                                    }
+                                    .tint(.green)
+                                } else {
+                                    Button {
+                                        torrents.pause(t.id)
+                                    } label: {
+                                        Label("Pausieren", systemImage: "pause.fill")
+                                    }
+                                    .tint(.orange)
+                                }
+                            }
+                        }
+                    }
+                }
+                if downloads.records.isEmpty && torrents.items.isEmpty {
                     Section {
                         VStack(spacing: 10) {
                             Image(systemName: "arrow.down.circle.dotted").font(.system(size: 40)).foregroundStyle(.secondary)
                             Text("Noch keine Downloads").font(.headline)
-                            Text("Tippe auf +, füge einen Link ein oder lade über den Browser-Tab. Plexo verteilt die Datei auf WLAN und Mobilfunk gleichzeitig.")
+                            Text("Tippe auf +: Links, Magnet-Links oder .torrent-Dateien. Oder lade über den Browser-Tab. Plexo verteilt alles auf WLAN und Mobilfunk gleichzeitig.")
                                 .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 20)
                     }
-                } else {
-                    Section {
+                } else if !downloads.records.isEmpty {
+                    Section(torrents.items.isEmpty ? "" : "Dateien & Links") {
                         ForEach(downloads.records) { r in
                             NavigationLink(value: r.id) {
                                 DownloadRow(record: r, live: downloads.live[r.id])
@@ -61,6 +93,7 @@ struct DownloadsView: View {
             }
             .navigationTitle("Plexo")
             .navigationDestination(for: UUID.self) { DownloadDetailView(id: $0) }
+            .navigationDestination(for: TorrentRef.self) { TorrentDetailView(id: $0.id) }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
@@ -73,11 +106,13 @@ struct DownloadsView: View {
                     Menu {
                         Button {
                             downloads.pauseAll()
+                            torrents.pauseAll()
                         } label: {
                             Label("Alle pausieren", systemImage: "pause.circle")
                         }
                         Button {
                             downloads.resumeAll()
+                            torrents.resumeAll()
                         } label: {
                             Label("Alle fortsetzen", systemImage: "play.circle")
                         }
@@ -100,11 +135,13 @@ struct DownloadsView: View {
                 AddDownloadSheet(initialLinks: nil, headers: [:], fileName: nil) {}
                     .environmentObject(downloads)
                     .environmentObject(networks)
+                    .environmentObject(torrents)
             }
             .sheet(isPresented: $showSettings) {
                 SettingsView()
                     .environmentObject(downloads)
                     .environmentObject(networks)
+                    .environmentObject(torrents)
             }
             .confirmationDialog(removeTarget?.fileName ?? "", isPresented: Binding(
                 get: { removeTarget != nil }, set: { if !$0 { removeTarget = nil } }), titleVisibility: .visible) {
@@ -151,6 +188,7 @@ struct DownloadsView: View {
 
 /// Gesamtgeschwindigkeit, aufgeteilt nach Netzwerk.
 struct SpeedHeader: View {
+    @EnvironmentObject private var torrents: TorrentManager
     @EnvironmentObject private var downloads: DownloadManager
     @EnvironmentObject private var networks: NetworkMonitor
 
@@ -161,7 +199,7 @@ struct SpeedHeader: View {
                     .font(.system(size: 30, weight: .bold, design: .rounded))
                     .monospacedDigit()
                 Spacer()
-                Text("\(downloads.activeCount) aktiv").font(.caption).foregroundStyle(.secondary)
+                Text("\(downloads.activeCount + torrents.activeCount) aktiv").font(.caption).foregroundStyle(.secondary)
             }
             SpeedBar(kinds: networks.visibleKinds, speeds: networks.speeds)
             HStack(spacing: 14) {

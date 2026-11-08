@@ -1,12 +1,15 @@
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 // „Neuer Download“ – entspricht NewDownloadDialog.tsx in Plexo.
 
 struct AddDownloadSheet: View {
     @EnvironmentObject private var downloads: DownloadManager
     @EnvironmentObject private var networks: NetworkMonitor
+    @EnvironmentObject private var torrents: TorrentManager
     @Environment(\.dismiss) private var dismiss
+    @State private var showTorrentPicker = false
 
     let initialLinks: String?
     let headers: [String: String]
@@ -20,10 +23,36 @@ struct AddDownloadSheet: View {
     @State private var turbo = true
     @State private var didLoad = false
 
-    private var parsedLinks: [String] {
+    private var allLinks: [String] {
         links.split(whereSeparator: { $0.isNewline || $0 == " " })
             .map { String($0).trimmingCharacters(in: .whitespaces) }
-            .filter { $0.lowercased().hasPrefix("http://") || $0.lowercased().hasPrefix("https://") }
+    }
+
+    private static func isTorrentURL(_ s: String) -> Bool {
+        guard let u = URL(string: s) else { return false }
+        return u.pathExtension.lowercased() == "torrent"
+    }
+
+    /// Magnet-Links und Links auf .torrent-Dateien → Torrent-Engine.
+    private var torrentLinks: [String] {
+        allLinks.filter { $0.lowercased().hasPrefix("magnet:") || Self.isTorrentURL($0) }
+    }
+
+    /// Alle übrigen http(s)-Links → Datei-Download.
+    private var parsedLinks: [String] {
+        allLinks.filter {
+            ($0.lowercased().hasPrefix("http://") || $0.lowercased().hasPrefix("https://")) && !Self.isTorrentURL($0)
+        }
+    }
+
+    private var summary: String {
+        var parts: [String] = []
+        if !parsedLinks.isEmpty { parts.append("\(parsedLinks.count) Datei-Link(s)") }
+        if !torrentLinks.isEmpty { parts.append("\(torrentLinks.count) Torrent/Magnet") }
+        if parts.isEmpty {
+            return "Alles geht: direkte Links (http/https), Magnet-Links, Links auf .torrent-Dateien – einer pro Zeile."
+        }
+        return parts.joined(separator: " · ") + " erkannt."
     }
 
     var body: some View {
@@ -41,10 +70,15 @@ struct AddDownloadSheet: View {
                     } label: {
                         Label("Aus Zwischenablage einfügen", systemImage: "doc.on.clipboard")
                     }
+                    Button {
+                        showTorrentPicker = true
+                    } label: {
+                        Label("Torrent-Datei öffnen…", systemImage: "doc.badge.arrow.up")
+                    }
                 } header: {
                     Text("Links")
                 } footer: {
-                    Text(parsedLinks.count > 1 ? "\(parsedLinks.count) Links erkannt – einer pro Zeile." : "Direkte Download-Links (http/https). Mehrere Links: einer pro Zeile.")
+                    Text(summary)
                 }
 
                 if parsedLinks.count <= 1 {
@@ -104,16 +138,36 @@ struct AddDownloadSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Laden") {
-                        let count = downloads.add(links: parsedLinks, headers: headers,
-                                                  networks: NetworkKind.allCases.filter { selected.contains($0) },
-                                                  streams: streams, fileName: name, turbo: turbo)
+                        var count = 0
+                        if !parsedLinks.isEmpty {
+                            count += downloads.add(links: parsedLinks, headers: headers,
+                                                   networks: NetworkKind.allCases.filter { selected.contains($0) },
+                                                   streams: streams, fileName: name, turbo: turbo)
+                        }
+                        for t in torrentLinks {
+                            if t.lowercased().hasPrefix("magnet:") {
+                                torrents.addMagnet(t)
+                            } else if let u = URL(string: t) {
+                                torrents.addTorrentURL(u, headers: headers)
+                            }
+                            count += 1
+                        }
                         if count > 0 {
                             onAdded()
                             dismiss()
                         }
                     }
                     .bold()
-                    .disabled(parsedLinks.isEmpty || selected.isEmpty)
+                    .disabled((parsedLinks.isEmpty || selected.isEmpty) && torrentLinks.isEmpty)
+                }
+            }
+            .fileImporter(isPresented: $showTorrentPicker,
+                          allowedContentTypes: [UTType(filenameExtension: "torrent") ?? .data, .data],
+                          allowsMultipleSelection: true) { result in
+                if case .success(let urls) = result, !urls.isEmpty {
+                    for u in urls { torrents.addTorrentFile(u) }
+                    onAdded()
+                    dismiss()
                 }
             }
             .onAppear {
@@ -125,7 +179,7 @@ struct AddDownloadSheet: View {
                 if let initialLinks {
                     links = initialLinks
                 } else if let clip = UIPasteboard.general.string,
-                          clip.lowercased().hasPrefix("http"), clip.count < 4000 {
+                          clip.lowercased().hasPrefix("http") || clip.lowercased().hasPrefix("magnet:"), clip.count < 8000 {
                     links = clip
                 }
                 if let fileName { name = fileName }

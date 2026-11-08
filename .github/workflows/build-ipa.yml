@@ -24,6 +24,23 @@ jobs:
       - name: XcodeGen installieren
         run: brew install xcodegen
 
+      - name: Boost-Header (Cache)
+        id: boost-cache
+        uses: actions/cache@v4
+        with:
+          path: build-deps/boost
+          key: boost-1.86.0-headers
+
+      - name: Boost-Header laden
+        if: steps.boost-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p build-deps
+          curl -fsSL -o boost.tar.bz2 https://archives.boost.io/release/1.86.0/source/boost_1_86_0.tar.bz2
+          tar xjf boost.tar.bz2 boost_1_86_0/boost
+          mv boost_1_86_0 build-deps/boost
+          rm boost.tar.bz2
+          ls build-deps/boost/boost | head -3
+
       - name: Xcode-Projekt erzeugen
         run: xcodegen generate
 
@@ -31,6 +48,7 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild \
+            -jobs 8 \
             -project Plexo.xcodeproj \
             -scheme Plexo \
             -configuration Release \

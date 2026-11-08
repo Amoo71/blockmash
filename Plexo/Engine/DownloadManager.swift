@@ -538,6 +538,10 @@ final class DownloadManager: ObservableObject {
             l.message = "Hintergrund-Modus · \(parts) Teile · lädt auch bei gesperrtem Bildschirm"
             live[r.id] = l
         }
+        for (k, v) in TorrentManager.shared.speedsByNetwork() {
+            speeds[k, default: 0] += v
+            pendingUsage[k, default: 0] += Int64(v)
+        }
         totalSpeed = speeds.values.reduce(0, +)
         monitor.record(speeds: speeds, usage: pendingUsage)
         pendingUsage = [:]
