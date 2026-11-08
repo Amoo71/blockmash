@@ -1,0 +1,24 @@
+name: SwitchMirror
+options:
+  bundleIdPrefix: com.amoo71
+  deploymentTarget:
+    iOS: "18.0"
+targets:
+  SwitchMirror:
+    type: application
+    platform: iOS
+    sources:
+      - path: .
+        excludes:
+          - project.yml
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.amoo71.SwitchMirror
+        PRODUCT_NAME: SwitchMirror
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: SwitchMirror
+        INFOPLIST_KEY_UIUserInterfaceStyle: Dark
+        INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "Not used by the current prototype."
+        IPHONEOS_DEPLOYMENT_TARGET: "18.0"
