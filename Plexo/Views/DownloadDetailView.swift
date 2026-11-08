@@ -50,6 +50,20 @@ struct DownloadDetailView: View {
                     } else if let msg = live?.message {
                         Text(msg).font(.caption).foregroundStyle(.orange)
                     }
+                    if r.state == .downloading {
+                        HStack {
+                            Label(r.engine == .turbo ? "Turbo – alle Netzwerke" : "Hintergrund-Modus (iOS)",
+                                  systemImage: r.engine == .turbo ? "bolt.fill" : "moon.zzz.fill")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(r.engine == .turbo ? Color(hex: "#7C5CFF") : Color.secondary)
+                            Spacer()
+                            if r.engine == .background && downloads.canTurbo(r) {
+                                Button("Turbo") { downloads.switchToTurbo(r.id) }
+                                    .font(.caption.bold())
+                                    .buttonStyle(.bordered)
+                            }
+                        }
+                    }
                     if r.state != .completed && r.totalBytes > 0 && !r.supportsRanges {
                         Label("Server unterstützt keine Teil-Downloads – nur ein Netzwerk, keine Fortsetzung.",
                               systemImage: "info.circle")

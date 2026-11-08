@@ -14,6 +14,13 @@ Jede Verbindung ist auf iOS über `Network.framework` fest an WLAN, Mobilfunk od
 - Server ohne Range-Unterstützung: ein Stream
 - Mehr Tempo gibt es nur, wenn jedes Netzwerk seine eigene Internetverbindung hat (WLAN-Router + Mobilfunk ✓)
 
+## Zwei Engines – stabil auch im Hintergrund
+
+- **Hintergrund (iOS Background-Session):** Die Datei wird in parallele Teile zerlegt (Standard 6), iOS lädt sie selbst – weiter bei gesperrtem Bildschirm, in anderen Apps und sogar wenn iOS Plexo beendet. Abbrüche werden mit Resume-Daten fortgesetzt, fertige Teile in die Datei eingesetzt.
+- **Turbo (WLAN + Mobilfunk):** solange Plexo im Vordergrund ist. Wechselst du die App, werden die restlichen Teile automatisch an die Hintergrund-Engine übergeben – nichts geht verloren. Zurück in der App: „Turbo“-Knopf im Download.
+
+Nur wenn du Plexo im App-Umschalter wegwischst, stoppt iOS alle Downloads; beim nächsten Öffnen geht es an derselben Stelle weiter.
+
 ## Funktionen
 
 | Plexo (Desktop) | Plexo iOS |
@@ -47,7 +54,7 @@ Die App wird komplett auf GitHub gebaut – kein Mac nötig.
 
 ## Hinweise
 
-- iOS pausiert Downloads im Hintergrund. Lass Plexo offen (Bildschirm bleibt standardmäßig an). Unterbrochene Downloads setzen dort fort, wo sie aufgehört haben.
+- Hintergrund-Downloads laufen über die Background-Session des Host-Programms. Am zuverlässigsten mit normal installierter IPA (SideStore/AltStore); in LiveContainer funktioniert es, solange LiveContainer nicht weggewischt wird.
 - Mobilfunk-Downloads verbrauchen Datenvolumen – setze unter *Netzwerke › Mobilfunk* ein Limit.
 - Falls Ordner verknüpfen / Datei-Import in LiveContainer nicht reagiert: App in LiveContainer lange drücken → Einstellungen → „Fix File Picker“.
 

@@ -96,6 +96,8 @@ final class NetworkMonitor: ObservableObject {
     @Published private(set) var settings: [NetworkKind: NetworkSettings] = [:]
     @Published private(set) var speeds: [NetworkKind: Double] = [:]
     @Published private(set) var history: [NetworkKind: [Double]] = [:]
+    /// Netzwerk, über das iOS gerade standardmäßig lädt (Hintergrund-Downloads).
+    @Published private(set) var primary: NetworkKind?
 
     private var monitors: [NWPathMonitor] = []
     private let queue = DispatchQueue(label: "plexo.netmon")
@@ -124,6 +126,23 @@ final class NetworkMonitor: ObservableObject {
             monitor.start(queue: queue)
             monitors.append(monitor)
         }
+        let general = NWPathMonitor()
+        general.pathUpdateHandler = { [weak self] path in
+            var kind: NetworkKind?
+            if path.status == .satisfied {
+                if path.usesInterfaceType(.wifi) {
+                    kind = .wifi
+                } else if path.usesInterfaceType(.wiredEthernet) {
+                    kind = .ethernet
+                } else if path.usesInterfaceType(.cellular) {
+                    kind = .cellular
+                }
+            }
+            let result = kind
+            Task { @MainActor in self?.primary = result }
+        }
+        general.start(queue: queue)
+        monitors.append(general)
         rollPeriods()
     }
 

@@ -17,6 +17,7 @@ struct AddDownloadSheet: View {
     @State private var name = ""
     @State private var selected: Set<NetworkKind> = []
     @State private var streams = 0
+    @State private var turbo = true
     @State private var didLoad = false
 
     private var parsedLinks: [String] {
@@ -76,6 +77,17 @@ struct AddDownloadSheet: View {
                 }
 
                 Section {
+                    Toggle(isOn: $turbo) {
+                        VStack(alignment: .leading) {
+                            Text("Turbo: Netzwerke kombinieren")
+                            Text(turbo ? "Im Vordergrund über alle Netzwerke, im Hintergrund automatisch weiter über iOS"
+                                       : "Nur Hintergrund-Modus – iOS lädt stabil weiter, auch bei gesperrtem Bildschirm")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                Section {
                     Picker("Streams pro Netzwerk", selection: $streams) {
                         Text("Automatisch").tag(0)
                         ForEach([1, 2, 4, 8, 16], id: \.self) { n in Text("\(n)").tag(n) }
@@ -94,7 +106,7 @@ struct AddDownloadSheet: View {
                     Button("Laden") {
                         let count = downloads.add(links: parsedLinks, headers: headers,
                                                   networks: NetworkKind.allCases.filter { selected.contains($0) },
-                                                  streams: streams, fileName: name)
+                                                  streams: streams, fileName: name, turbo: turbo)
                         if count > 0 {
                             onAdded()
                             dismiss()
@@ -108,6 +120,7 @@ struct AddDownloadSheet: View {
                 guard !didLoad else { return }
                 didLoad = true
                 streams = downloads.defaultStreams
+                turbo = downloads.turboDefault
                 selected = Set(NetworkKind.allCases.filter { networks.settings[$0]?.enabled ?? true })
                 if let initialLinks {
                     links = initialLinks

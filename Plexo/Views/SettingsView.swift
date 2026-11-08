@@ -9,7 +9,9 @@ struct SettingsView: View {
     @AppStorage(DownloadManager.globalLimitKey) private var globalLimit = 0
     @AppStorage(DownloadManager.slowModeKey) private var slowMode = false
     @AppStorage(DownloadManager.slowModeLimitKey) private var slowLimit = 512 * 1024
-    @AppStorage(DownloadManager.keepAwakeKey) private var keepAwake = true
+    @AppStorage(DownloadManager.keepAwakeKey) private var keepAwake = false
+    @AppStorage(DownloadManager.bgPartsKey) private var bgParts = 6
+    @AppStorage(DownloadManager.turboDefaultKey) private var turboDefault = true
     @AppStorage(DownloadManager.notifyKey) private var notify = true
     @AppStorage(DownloadManager.folderKey) private var folder = "Downloads"
 
@@ -24,8 +26,12 @@ struct SettingsView: View {
                         Text("Automatisch").tag(0)
                         ForEach([1, 2, 4, 8, 16], id: \.self) { n in Text("\(n)").tag(n) }
                     }
+                    Toggle("Turbo standardmäßig an", isOn: $turboDefault)
+                    Stepper("Hintergrund-Teile: \(bgParts)", value: $bgParts, in: 1...16)
                 } header: {
-                    Text("Warteschlange")
+                    Text("Warteschlange & Engines")
+                } footer: {
+                    Text("Turbo kombiniert WLAN + Mobilfunk, solange Plexo offen ist. Im Hintergrund übernimmt iOS: die Datei wird in parallele Teile zerlegt und läuft auch bei gesperrtem Bildschirm oder geschlossener App weiter.")
                 }
 
                 Section {
@@ -59,7 +65,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Allgemein")
                 } footer: {
-                    Text("iOS pausiert Downloads im Hintergrund. Lass Plexo geöffnet – unterbrochene Downloads setzen beim nächsten Start dort fort, wo sie aufgehört haben.")
+                    Text("Downloads laufen im Hintergrund weiter. Nur wenn du Plexo im App-Umschalter wegwischst, stoppt iOS sie – beim nächsten Öffnen geht es an derselben Stelle weiter.")
                 }
 
                 Section("Info") {

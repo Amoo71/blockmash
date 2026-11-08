@@ -40,6 +40,33 @@ struct BlockState: Codable, Sendable {
     }
 }
 
+enum DownloadEngine: String, Codable, Sendable {
+    /// Mehrere Netzwerke gleichzeitig (nur im Vordergrund).
+    case turbo
+    /// System-Hintergrund-Session: läuft weiter, wenn die App im Hintergrund ist.
+    case background
+}
+
+/// Ein Teil eines Hintergrund-Downloads (eigene Range-Anfrage in der Background-URLSession).
+struct Segment: Codable, Identifiable, Sendable {
+    var id = UUID()
+    var start: Int64
+    /// Exklusiv; -1 = bis Dateiende.
+    var end: Int64
+    /// Erster/letzter Block, den dieses Teil abdeckt (-1 = keine Blöcke).
+    var firstBlock: Int
+    var lastBlock: Int
+    /// false = ganze Datei ohne Range-Header.
+    var ranged: Bool
+    var received: Int64 = 0
+    var attempts = 0
+    /// Datei ist vollständig geladen, aber noch nicht in die Zieldatei übertragen.
+    var fileReady = false
+    var done = false
+
+    var length: Int64? { end >= 0 ? end - start : nil }
+}
+
 struct DownloadRecord: Codable, Identifiable, Sendable {
     var id = UUID()
     var url: String
@@ -60,11 +87,20 @@ struct DownloadRecord: Codable, Identifiable, Sendable {
     var networks: [NetworkKind]
     /// 0 = automatisch.
     var streams: Int = 0
+    /// Nutzer möchte Netzwerke kombinieren (Turbo), wenn möglich.
+    var turbo = true
+    var engine: DownloadEngine = .background
+    var segments: [Segment] = []
     var bytesByNetwork: [String: Int64] = [:]
     var created = Date()
     var finished: Date?
 
-    var downloadedBytes: Int64 { blocks.reduce(0) { $0 + $1.done } }
+    var downloadedBytes: Int64 {
+        let fromBlocks = blocks.reduce(0) { $0 + $1.done }
+        let inFlight = segments.filter { !$0.done }.reduce(Int64(0)) { $0 + $1.received }
+        if segments.contains(where: { !$0.ranged && !$0.done }) { return inFlight }
+        return min(totalBytes > 0 ? totalBytes : Int64.max, fromBlocks + inFlight)
+    }
 
     var progress: Double {
         guard totalBytes > 0 else { return state == .completed ? 1 : 0 }

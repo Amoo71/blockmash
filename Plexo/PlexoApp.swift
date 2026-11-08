@@ -1,7 +1,25 @@
 import SwiftUI
+import UIKit
+
+final class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication,
+                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        // Hintergrund-Session sofort wieder verbinden, damit iOS fertige Teile zustellen kann.
+        _ = BackgroundDownloader.shared.session
+        return true
+    }
+
+    func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String,
+                     completionHandler: @escaping () -> Void) {
+        BackgroundDownloader.shared.setCompletionHandler(completionHandler)
+        _ = DownloadManager.shared
+    }
+}
 
 @main
 struct PlexoApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var downloads = DownloadManager.shared
     @StateObject private var networks = NetworkMonitor.shared
     @StateObject private var files = FilesStore.shared
@@ -14,6 +32,13 @@ struct PlexoApp: App {
                 .environmentObject(files)
                 .task { downloads.resumeOnLaunch() }
                 .onOpenURL { url in AddRequest.shared.handle(url) }
+        }
+        .onChange(of: scenePhase) { phase in
+            switch phase {
+            case .background: downloads.enterBackground()
+            case .active: downloads.enterForeground()
+            default: break
+            }
         }
     }
 }
