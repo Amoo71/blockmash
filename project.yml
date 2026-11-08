@@ -113,6 +113,9 @@ targets:
       - target: UnRAR
       - target: Torrent
       - package: ZIPFoundation
+      - sdk: SystemConfiguration.framework
+      - sdk: CoreFoundation.framework
+      - sdk: libz.tbd
     info:
       path: Plexo/Info.plist
       properties:

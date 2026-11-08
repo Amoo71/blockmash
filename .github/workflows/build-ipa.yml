@@ -62,6 +62,7 @@ jobs:
           if ! grep -q "BUILD SUCCEEDED" build.log || [ ! -f build/Build/Products/Release-iphoneos/Plexo.app/Plexo ]; then
             echo "::error::Build fehlgeschlagen"
             grep -E "error:" build.log | sort -u | head -80
+            grep -A25 -E "Undefined symbols|ld: " build.log | head -120 || true
             exit 1
           fi
 
