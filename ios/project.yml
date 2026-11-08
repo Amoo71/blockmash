@@ -21,4 +21,6 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: SwitchMirror
         INFOPLIST_KEY_UIUserInterfaceStyle: Dark
         INFOPLIST_KEY_NSScreenCaptureUsageDescription: "SwitchMirror needs permission to share your screen with your Nintendo Switch."
+        INFOPLIST_KEY_UIBackgroundModes: "screen-capture"
+        CODE_SIGN_ENTITLEMENTS: SwitchMirror.entitlements
         IPHONEOS_DEPLOYMENT_TARGET: "27.0"
