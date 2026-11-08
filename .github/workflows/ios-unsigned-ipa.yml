@@ -1,0 +1,56 @@
+name: Build unsigned iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios-unsigned-ipa.yml"
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          xcodebuild -version
+          xcode-select -p
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Build for physical iOS devices (unsigned)
+        run: |
+          xcodebuild \
+            -project ios/SwitchMirror.xcodeproj \
+            -scheme SwitchMirror \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package unsigned IPA
+        run: |
+          APP_PATH="build/DerivedData/Build/Products/Release-iphoneos/SwitchMirror.app"
+          test -d "$APP_PATH"
+          mkdir -p build/Payload
+          cp -R "$APP_PATH" build/Payload/
+          cd build
+          /usr/bin/zip -qry SwitchMirror-unsigned.ipa Payload
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SwitchMirror-unsigned-IPA
+          path: build/SwitchMirror-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
