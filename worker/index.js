@@ -16,7 +16,7 @@ export class RoomRelay {
     server.serializeAttachment({ role });
     server.addEventListener("message", event => {
       if (typeof event.data === "string") {
-        if (event.data.length > 256) { server.close(1009, "Message too large"); return; }
+        if (event.data.length > 8192) { server.close(1009, "Message too large"); return; }
         for (const peer of this.state.getWebSockets()) {
           if (peer !== server && peer.readyState === WebSocket.OPEN) peer.send(event.data);
         }
